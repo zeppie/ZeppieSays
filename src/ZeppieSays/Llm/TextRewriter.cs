@@ -148,6 +148,16 @@ public sealed partial class TextRewriter(AppSettings settings)
             prompt.AppendLine("The style to write in (follow these rules from the user closely):");
             prompt.AppendLine(style.Instructions.Trim());
         }
+        if (AsksForParagraphs(style) && !translate)
+        {
+            // "Split into paragraphs" alone is ignored by small models on short emails; spell out the layout and show it.
+            prompt.AppendLine();
+            prompt.AppendLine("Layout: put a greeting on its own line, followed by an empty line. Split the rest into short paragraphs " +
+                              "of one to three sentences, one per topic, with an empty line between them. Put a sign-off on its own " +
+                              "line with the name on the line below it. For example:");
+            prompt.AppendLine("<dictation>hoi Mark ik heb de documenten ontvangen dank je ik kijk er morgen naar verder wilde ik vragen of het overleg van donderdag doorgaat groetjes Dirk</dictation> ->");
+            prompt.AppendLine("Hoi Mark,\n\nIk heb de documenten ontvangen, dank je. Ik kijk er morgen naar.\n\nVerder wilde ik vragen of het overleg van donderdag doorgaat.\n\nGroeten,\nDirk");
+        }
         prompt.AppendLine();
         prompt.AppendLine("Hard rules:");
         prompt.AppendLine("- Output only the rewritten text: no quotes, tags, labels, explanations or comments.");
@@ -182,6 +192,10 @@ public sealed partial class TextRewriter(AppSettings settings)
         }
         return prompt.ToString();
     }
+
+    static bool AsksForParagraphs(Style style) =>
+        style.Strength != Strength.Light && style.Instructions is { } instructions &&
+        (instructions.Contains("paragraph", StringComparison.OrdinalIgnoreCase) || instructions.Contains("alinea", StringComparison.OrdinalIgnoreCase));
 
     static string DescribeApp(ScreenContext context) =>
         string.IsNullOrWhiteSpace(context.Title) ? context.ProcessName : $"{context.ProcessName} (window: {context.Title})";
@@ -259,7 +273,7 @@ public sealed partial class TextRewriter(AppSettings settings)
     /// </summary>
     static string DropInventedSignOff(string original, string text)
     {
-        var lines = text.Replace("\r", "").Split('\n').ToList();
+        var lines = text.Replace("\r", "").Split('\n').Select(l => l.TrimEnd()).ToList();
         var dictatedSignOff = SignOff().IsMatch(original);
         while (lines.Count > 1)
         {

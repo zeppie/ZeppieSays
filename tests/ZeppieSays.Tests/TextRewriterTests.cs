@@ -126,6 +126,26 @@ public class TextRewriterTests
     }
 
     [Fact]
+    public void Drops_spaces_at_the_end_of_lines()
+    {
+        var reply = "Hoi Mark,   \n \nHeb je volgende week tijd?";
+        Assert.Equal("Hoi Mark,\n\nHeb je volgende week tijd?",
+            TextRewriter.Accept("hoi Mark heb je volgende week tijd", reply, StyleOf(Strength.Medium)));
+    }
+
+    [Theory]
+    [InlineData(Strength.Medium, "Split into paragraphs where the topic changes.", true)]
+    [InlineData(Strength.Strong, "Gebruik alinea's.", true)]
+    [InlineData(Strength.Light, "Split into paragraphs where the topic changes.", false)]
+    [InlineData(Strength.Medium, "Keep it short.", false)]
+    public void Spells_out_the_layout_when_the_style_asks_for_paragraphs(Strength strength, string instructions, bool expected)
+    {
+        var style = new Style { Strength = strength, Instructions = instructions };
+        var prompt = TextRewriter.BuildSystemPrompt(style, In("olk", "Mail"), [], "nl");
+        Assert.Equal(expected, prompt.Contains("Layout: put a greeting on its own line"));
+    }
+
+    [Fact]
     public void Rejects_a_reply_that_invents_a_lot_of_text()
     {
         var reply = "So, can we start? I have prepared an agenda with five topics, a budget review and the planning for next quarter.";
