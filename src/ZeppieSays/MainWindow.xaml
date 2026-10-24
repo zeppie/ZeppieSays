@@ -1,0 +1,1113 @@
+﻿<Window x:Class="ZeppieSays.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:ZeppieSays.UI"
+        xmlns:core="clr-namespace:ZeppieSays.Core"
+        xmlns:notes="clr-namespace:ZeppieSays.Notes"
+        Title="ZeppieSays" Width="1180" Height="800" MinWidth="860" MinHeight="560"
+        WindowStartupLocation="CenterScreen" Icon="Assets/zeppie.ico"
+        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+    <!-- The sidebar runs up into the title bar; the caption buttons are drawn by us. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" GlassFrameThickness="0,0,0,1"
+                      CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <ui:EmptyToVisibleConverter x:Key="EmptyToVisible" />
+
+        <!-- Sidebar navigation: each tab is an icon and a label; the selected one gets a soft fill. -->
+        <Style x:Key="NavItem" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="DockPanel.Dock" Value="Top" />
+            <Setter Property="ui:Nav.Title" Value="{Binding Header, RelativeSource={RelativeSource Self}}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" CornerRadius="8" Padding="12,10" Margin="0,1" Background="Transparent">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{TemplateBinding Tag}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           FontSize="17" Width="22" VerticalAlignment="Center" />
+                                <ContentPresenter ContentSource="Header" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                  TextElement.FontWeight="Medium" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The tab control becomes the whole window: sidebar on the left, the page in a large rounded panel. -->
+        <Style x:Key="SidebarTabs" TargetType="TabControl">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <DockPanel Margin="16,0,16,16">
+                                <!-- Logo and wordmark: a bold "Zeppie", a lighter "Says" in the logo's purple. -->
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,48,0,28">
+                                    <Image Source="Assets/zeppie.png" Width="40" Height="40" VerticalAlignment="Center"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                    <TextBlock FontSize="26" Margin="12,0,0,3" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable Display, Segoe UI">
+                                        <Run Text="Zeppie" FontWeight="Bold" />
+                                        <Run Text="Says" FontWeight="Normal" Foreground="{StaticResource WordmarkAccent}" />
+                                    </TextBlock>
+                                </StackPanel>
+                                <DockPanel IsItemsHost="True" LastChildFill="False" />
+                            </DockPanel>
+
+                            <Border Grid.Column="1" Margin="0,44,12,12" CornerRadius="16"
+                                    Background="{DynamicResource LayerFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                <Grid Margin="56,40,52,8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <Grid Margin="0,0,0,16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding SelectedItem.(ui:Nav.Title), RelativeSource={RelativeSource TemplatedParent}}"
+                                                   FontSize="30" FontWeight="SemiBold" FontFamily="Segoe UI Variable Display, Segoe UI" />
+                                        <Border Grid.Column="1" x:Name="StatusPill" CornerRadius="14" Padding="14,6" VerticalAlignment="Center"
+                                                Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Status}" FontSize="13" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                    <ContentPresenter Grid.Row="1" x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <!-- The home page shows the keys in its hero already. -->
+                            <Trigger Property="SelectedIndex" Value="0">
+                                <Setter TargetName="StatusPill" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Stats on the Dictation and Insights pages -->
+        <Style x:Key="StatNumber" TargetType="Run">
+            <Setter Property="FontSize" Value="32" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI" />
+        </Style>
+        <Style x:Key="StatUnit" TargetType="Run">
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="InsightCard" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="26,22" />
+        </Style>
+        <Style x:Key="InsightNumber" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="38" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI" />
+        </Style>
+        <Style x:Key="InsightHeading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI" />
+        </Style>
+        <Style x:Key="InsightLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="InsightRule" TargetType="Border">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Margin" Value="0,18,0,18" />
+            <Setter Property="Background" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+        </Style>
+
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- One dictation key: the key itself, its model, the language spoken and the language typed. -->
+        <DataTemplate DataType="{x:Type ui:BindingViewModel}">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Content="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="8,4"
+                                Background="Transparent" BorderThickness="0" ToolTip="Remove this key"
+                                AutomationProperties.Name="{Binding Title, StringFormat='Remove {0}'}"
+                                Command="{Binding DataContext.RemoveKey, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"
+                                Visibility="{Binding DataContext.CanRemoveKeys, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}" />
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="28" />
+                            <ColumnDefinition Width="130" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Key" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                        <TextBlock Grid.Column="1" Text="Model" Style="{StaticResource Caption}" Margin="8,0,0,4" />
+                        <TextBlock Grid.Column="2" Text="You speak" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                        <TextBlock Grid.Column="4" Text="It types" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                        <Button Grid.Row="1" Content="{Binding KeyLabel}" Command="{Binding RecordKey}" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left" Padding="11,5"
+                                ToolTip="Click, then press the key or key combination you want (Esc to cancel)">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                                            <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
+                                            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <ComboBox Grid.Row="1" Grid.Column="1" Margin="8,0"
+                                  ItemsSource="{Binding DataContext.InstalledModels, RelativeSource={RelativeSource AncestorType=Window}}"
+                                  DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding ModelId}"
+                                  ToolTip="Model" />
+                        <ComboBox Grid.Row="1" Grid.Column="2"
+                                  ItemsSource="{Binding DataContext.Languages, RelativeSource={RelativeSource AncestorType=Window}}"
+                                  DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Language}"
+                                  IsEnabled="{Binding LanguageEnabled}"
+                                  ToolTip="The language you speak. Parakeet recognises it itself." />
+                        <TextBlock Grid.Row="1" Grid.Column="3" Text="&#xE72A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <ComboBox Grid.Row="1" Grid.Column="4"
+                                  ItemsSource="{Binding DataContext.OutputLanguages, RelativeSource={RelativeSource AncestorType=Window}}"
+                                  DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding OutputLanguage}"
+                                  ToolTip="Another language here translates what you say, using your default style model (Styles page)" />
+                    </Grid>
+                    <TextBlock Text="{Binding KeyProblem}" Foreground="#E5484D" FontSize="12" Margin="2,6,0,0" TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding KeyProblem}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid x:Name="Root">
+        <TabControl x:Name="Tabs" Style="{StaticResource SidebarTabs}" ItemContainerStyle="{StaticResource NavItem}">
+            <!-- Dictation: the home page, a greeting with the keys and the headline stats -->
+            <TabItem Header="Dictation" Tag="&#xE720;" x:Name="HomeTab" ui:Nav.Title="{Binding Insights.Greeting}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16">
+                    <Grid VerticalAlignment="Top">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="280" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Hero: how to dictate, on the logo's purple -->
+                        <Border CornerRadius="16" MinHeight="230" ClipToBounds="True">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#7A48E0" Offset="0" />
+                                    <GradientStop Color="#4A28B0" Offset="0.55" />
+                                    <GradientStop Color="#24146A" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="36,32,12,30" VerticalAlignment="Center">
+                                    <TextBlock Text="Talk anywhere you write" Foreground="White" FontSize="30" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI Variable Display, Segoe UI" TextWrapping="Wrap" />
+                                    <TextBlock Foreground="White" Opacity="0.82" FontSize="15" Margin="0,8,0,20" TextWrapping="Wrap"
+                                               Text="Hold a key and talk, or tap it to keep listening. Your words land wherever your cursor is, and everything runs on this PC." />
+                                    <ItemsControl ItemsSource="{Binding Keys}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type ui:BindingViewModel}">
+                                                <Border Background="#33FFFFFF" CornerRadius="10" Padding="14,8" Margin="0,0,10,8">
+                                                    <TextBlock Foreground="White" FontSize="14" TextWrapping="Wrap">
+                                                        <Run Text="{Binding KeyLabel, Mode=OneWay}" FontWeight="SemiBold" />
+                                                        <Run Text="  " /><Run Text="{Binding ModelName, Mode=OneWay}" />
+                                                        <Run Text="{Binding OutputLabel, Mode=OneWay}" FontWeight="SemiBold" />
+                                                    </TextBlock>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                                <!-- The logo's sound bars, as decoration -->
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,36,0"
+                                            Opacity="0.9">
+                                    <StackPanel.Resources>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Width" Value="14" />
+                                            <Setter Property="CornerRadius" Value="7" />
+                                            <Setter Property="Margin" Value="5,0" />
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Background">
+                                                <Setter.Value>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                        <GradientStop Color="#FFFFFFFF" Offset="0" />
+                                                        <GradientStop Color="#D9E4DCFF" Offset="1" />
+                                                    </LinearGradientBrush>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </StackPanel.Resources>
+                                    <Border Height="22" Opacity="0.5" />
+                                    <Border Height="52" Opacity="0.7" />
+                                    <Border Height="84" />
+                                    <Border Height="124" />
+                                    <Border Height="84" />
+                                    <Border Height="52" Opacity="0.7" />
+                                    <Border Height="22" Opacity="0.5" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Headline stats -->
+                        <Border Grid.Column="1" Style="{StaticResource Card}" Margin="20,0,0,0" Padding="28,22" VerticalAlignment="Stretch"
+                                DataContext="{Binding Insights}">
+                            <StackPanel VerticalAlignment="Center">
+                                <StackPanel.Resources>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Margin" Value="0,6" />
+                                    </Style>
+                                </StackPanel.Resources>
+                                <TextBlock>
+                                    <Run Text="{Binding TotalWords, Mode=OneWay, StringFormat=N0}" Style="{StaticResource StatNumber}" />
+                                    <Run Text="  total words" Style="{StaticResource StatUnit}" />
+                                </TextBlock>
+                                <TextBlock>
+                                    <Run Text="{Binding Wpm, Mode=OneWay}" Style="{StaticResource StatNumber}" />
+                                    <Run Text="  wpm" Style="{StaticResource StatUnit}" />
+                                </TextBlock>
+                                <TextBlock>
+                                    <Run Text="{Binding Streak, Mode=OneWay}" Style="{StaticResource StatNumber}" />
+                                    <Run Text="{Binding StreakUnit, Mode=OneWay, StringFormat='  {0}'}" Style="{StaticResource StatUnit}" />
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Notetaker: transcribe audio files dropped here or put in the folder -->
+            <TabItem Header="Notetaker" Tag="&#xE7C8;" x:Name="NotetakerTab">
+                <Grid DataContext="{Binding Notetaker}" AllowDrop="True" Drop="Notetaker_Drop" DragOver="Notetaker_DragOver"
+                      Background="Transparent" Margin="0,4,18,16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- How files are transcribed -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="28" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Folder" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="10,7">
+                                        <TextBlock Text="{Binding Folder}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Folder}" />
+                                    </Border>
+                                    <Button Grid.Column="1" Content="Change…" Command="{Binding ChooseFolder}" Margin="8,0,0,0" />
+                                    <Button Grid.Column="2" Content="Open" Command="{Binding OpenFolder}" Margin="6,0,0,0" />
+                                </Grid>
+                                <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
+                                           Text="Every audio or video file in this folder is transcribed. The transcript (.md) and the audio then move to Done." />
+
+                                <!-- Meetings -->
+                                <Grid Margin="0,14,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Content="Ask when a meeting starts" IsChecked="{Binding AskToRecordMeetings}"
+                                              VerticalAlignment="Center"
+                                              ToolTip="When Teams, Zoom, Webex, Slack or Discord starts using your microphone" />
+                                    <Button Grid.Column="1" Command="{Binding ToggleRecording}" MinWidth="128" Margin="8,0,0,0"
+                                            Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="{Binding RecordLabel}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="9" Height="9" Fill="#FF6B6F" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <TextBlock Text="{Binding RecordLabel}" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                                <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
+                                           Text="Records your microphone and the call separately, so you are always labelled right. Headphones keep the call out of your microphone." />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="130" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Model" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                        <ComboBox ItemsSource="{Binding DataContext.InstalledModels, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding ModelId}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                        <TextBlock Text="Language" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                        <ComboBox ItemsSource="{Binding DataContext.Languages, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Language}"
+                                                  ToolTip="Whisper only; Parakeet detects the language itself" />
+                                    </StackPanel>
+                                </Grid>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <CheckBox Content="Label speakers" IsChecked="{Binding LabelSpeakers}" Margin="0,0,8,4"
+                                              ToolTip="Speaker 1, Speaker 2 per paragraph. Downloads two small models (33 MB) the first time." />
+                                    <ComboBox ItemsSource="{x:Static ui:NotetakerViewModel.SpeakerCounts}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" SelectedValue="{Binding Speakers}" MinWidth="104" Margin="0,0,20,4"
+                                              IsEnabled="{Binding LabelSpeakers}" VerticalAlignment="Center"
+                                              ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
+                                    <CheckBox Content="Summary and action items" IsChecked="{Binding Summarize}" Margin="0,0,20,4"
+                                              ToolTip="Written by your default style model (Styles page)" />
+                                    <CheckBox Content="Dictionary hints" IsChecked="{Binding UseDictionary}" Margin="0,0,0,4"
+                                              ToolTip="Gives your dictionary words to Whisper so names are spelled right" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Transcripts, and the selected one -->
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="340" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <!-- Drop zone -->
+                            <Border CornerRadius="12" Padding="14,12" Margin="0,0,0,10" BorderThickness="1.5"
+                                    BorderBrush="{StaticResource Accent}" Background="{StaticResource AccentSoft}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE898;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20"
+                                               Foreground="{StaticResource Accent}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Margin="12,0,0,0" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
+                                               Text="Drop audio or video files here, or save them in the folder." />
+                                </Grid>
+                            </Border>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding Selected}"
+                                     BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <!-- Rows like the sidebar: rounded, a soft fill when selected -->
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Cursor" Value="Hand" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Bd" CornerRadius="10" Padding="10,4" Margin="0,1" Background="Transparent">
+                                                        <ContentPresenter />
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                                        </Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type notes:NoteJob}">
+                                        <Grid Margin="0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="36" Height="36" CornerRadius="10" Background="{StaticResource AccentSoft}" VerticalAlignment="Top">
+                                                <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Accent}" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Margin="12,0,6,0">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding StatusText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap" ToolTip="{Binding StatusText}" />
+                                                <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="0,6,0,0"
+                                                             Foreground="{StaticResource Accent}"
+                                                             IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
+                                                             Visibility="{Binding IsWorking, Converter={StaticResource Visible}}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Content="Retry" Padding="10,3" VerticalAlignment="Center"
+                                                    Command="{Binding DataContext.Retry, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                    CommandParameter="{Binding}" Visibility="{Binding IsFailed, Converter={StaticResource Visible}}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+
+                        <!-- Preview -->
+                        <Border Grid.Column="2" Style="{StaticResource Card}" Margin="0" Padding="0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <!-- Name the speakers: renames them in the transcript and teaches the voice library -->
+                                <Border Grid.Row="1" Margin="20,0,14,10" Padding="12,8" CornerRadius="10"
+                                        Background="{StaticResource AccentSoft}"
+                                        Visibility="{Binding HasSpeakers, Converter={StaticResource Visible}}">
+                                    <StackPanel>
+                                        <TextBlock Text="Who's who? Name a speaker once and Zeppie Says recognises them next time."
+                                                   FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                        <ItemsControl ItemsSource="{Binding SpeakerNames}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type ui:SpeakerNameViewModel}">
+                                                    <StackPanel Orientation="Horizontal" Margin="0,2,10,2">
+                                                        <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="130"
+                                                                 ToolTip="{Binding Label}" />
+                                                        <Button Content="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                                Command="{Binding Save}" Margin="4,0,0,0" Padding="8,5" ToolTip="Save the name" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                                <Grid Margin="20,14,14,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Selected.Name, FallbackValue='Transcript', TargetNullValue='Transcript'}"
+                                               Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="1" Content="Open" Margin="8,0,0,0" Command="{Binding OpenTranscript}"
+                                            CommandParameter="{Binding Selected}" IsEnabled="{Binding Selected.IsDone, FallbackValue=False}" />
+                                    <Button Grid.Column="2" Content="Show in folder" Margin="6,0,0,0" Command="{Binding ShowInFolder}"
+                                            CommandParameter="{Binding Selected}" IsEnabled="{Binding Selected.IsDone, FallbackValue=False}" />
+                                </Grid>
+                                <FlowDocumentScrollViewer Grid.Row="2" ui:Markdown.Text="{Binding Preview}" Padding="20,0,14,14"
+                                                          VerticalScrollBarVisibility="Auto" IsToolBarVisible="False" />
+                                <TextBlock Grid.Row="2" Style="{StaticResource Caption}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           FontSize="14" Text="Pick a transcript to read it here.">
+                                    <TextBlock.Visibility>
+                                        <Binding Path="Preview" Converter="{StaticResource EmptyToVisible}" />
+                                    </TextBlock.Visibility>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- Keys -->
+            <TabItem Header="Keys" Tag="&#xE765;">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16">
+                    <StackPanel>
+                        <Border Style="{StaticResource Card}" Visibility="{Binding HasNoModels, Converter={StaticResource Visible}}"
+                                Background="{StaticResource AccentSoft}">
+                            <StackPanel>
+                                <TextBlock Text="Install a model to get started" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Style="{StaticResource Caption}"
+                                           Text="Open the Models tab. For Dutch, Whisper large-v3 turbo is a good start; for English, Parakeet v2." />
+                            </StackPanel>
+                        </Border>
+
+                        <ItemsControl ItemsSource="{Binding Keys}" />
+                        <Button Command="{Binding AddKey}" HorizontalAlignment="Left" Margin="0,0,0,12" Padding="12,6"
+                                AutomationProperties.Name="Add a key">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" VerticalAlignment="Center" />
+                                <TextBlock Text="Add a key" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </Button>
+
+                        <TextBlock Style="{StaticResource Caption}" Margin="4,4,4,0"
+                                   Text="Click a key field and press the key or combination you want, like F8 or Ctrl + Win. Hold it while you talk, or tap it once to keep listening and tap again to finish. Esc cancels. The text goes wherever your cursor is." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Models -->
+            <TabItem Header="Models" Tag="&#xE8F1;" x:Name="ModelsTab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16">
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding Catalog}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type ui:ModelRowViewModel}">
+                                    <Border Style="{StaticResource Card}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Margin="0,0,12,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Info.Name}" FontWeight="SemiBold" />
+                                                    <Border Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="6,0" Margin="8,0,0,0"
+                                                            Visibility="{Binding IsInstalled, Converter={StaticResource Visible}}">
+                                                        <TextBlock Text="Installed" FontSize="11" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Info.Description}" Style="{StaticResource Caption}" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding Details}" Style="{StaticResource Caption}" Opacity="0.8" Margin="0,2,0,0" />
+                                                <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="0,8,0,0"
+                                                             Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+                                                <TextBlock Text="{Binding Error}" Foreground="#E5484D" FontSize="12" Margin="0,4,0,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Error}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="{Binding ActionLabel}" Command="{Binding Action}"
+                                                    MinWidth="84" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Margin="4,2,4,12" Style="{StaticResource Caption}">
+                            <Hyperlink Command="{Binding AddCustomModel}">Add your own Whisper model file…</Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Dictionary -->
+            <TabItem Header="Dictionary" Tag="&#xE82D;">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBox x:Name="WordBox" Text="{Binding NewWord, UpdateSourceTrigger=PropertyChanged}" KeyDown="WordBox_KeyDown" />
+                    <TextBlock Grid.Row="1" Style="{StaticResource Caption}" Margin="4,6,4,10"
+                               Text="Type a word and press Enter. To fix a word that keeps coming out wrong, write it as  Betabit = beta bit, beta bid" />
+                    <ListBox Grid.Row="2" ItemsSource="{Binding Dictionary}" BorderThickness="0" Background="Transparent"
+                             HorizontalContentAlignment="Stretch">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type core:DictionaryEntry}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Term}" FontWeight="SemiBold" />
+                                        <ItemsControl ItemsSource="{Binding SoundsLike}" Margin="10,0,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" Style="{StaticResource Caption}" Margin="0,0,8,0" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="✕" Padding="8,2" Background="Transparent" BorderThickness="0"
+                                            ToolTip="Remove"
+                                            Command="{Binding DataContext.RemoveWord, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Styles -->
+            <TabItem Header="Styles" Tag="&#xE8D2;" x:Name="StylesTab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16" DataContext="{Binding Styles}">
+                    <StackPanel>
+                        <!-- Edit one style -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox ItemsSource="{Binding Styles}" SelectedItem="{Binding Selected}" DisplayMemberPath="Name" />
+                                    <Button Grid.Column="1" Content="New" Command="{Binding AddStyle}" Margin="8,0,0,0" MinWidth="64" />
+                                    <Button Grid.Column="2" Content="Delete" Command="{Binding DeleteStyle}" Margin="8,0,0,0" MinWidth="64"
+                                            IsEnabled="{Binding CanDeleteSelected}" />
+                                </Grid>
+
+                                <StackPanel DataContext="{Binding Selected}">
+                                    <TextBlock Text="Name" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
+
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,6,0">
+                                            <TextBlock Text="AI" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                            <ComboBox ItemsSource="{x:Static ui:StylesViewModel.Providers}" DisplayMemberPath="Label"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding Provider}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="6,0,0,0" Visibility="{Binding UsesOwnModel, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="Model" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                            <ComboBox IsEditable="True" ItemsSource="{Binding ModelSuggestions}"
+                                                      Text="{Binding ModelName, UpdateSourceTrigger=LostFocus}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="{Binding CloudNotice}" Foreground="#C77700" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
+                                               Visibility="{Binding IsCloud, Converter={StaticResource Visible}}" />
+
+                                    <TextBlock Text="{Binding DefaultNotice}" Style="{StaticResource Caption}" Margin="2,6,0,0"
+                                               Visibility="{Binding UsesDefault, Converter={StaticResource Visible}}" />
+
+                                    <StackPanel Visibility="{Binding UsesAi, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="How much may it change?" Style="{StaticResource Caption}" Margin="0,10,0,4" />
+                                        <ComboBox ItemsSource="{x:Static ui:StylesViewModel.Strengths}" DisplayMemberPath="Label"
+                                                  SelectedValuePath="Value" SelectedValue="{Binding Strength}" />
+
+                                        <TextBlock Text="Your rules, in plain words" Style="{StaticResource Caption}" Margin="0,10,0,4" />
+                                        <TextBox Text="{Binding Instructions, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True"
+                                                 TextWrapping="Wrap" MinHeight="72" VerticalScrollBarVisibility="Auto" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Try it -->
+                                <TextBlock Text="Try it" Style="{StaticResource SectionTitle}" Margin="0,16,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding TryText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" />
+                                    <ComboBox Grid.Column="1" ItemsSource="{x:Static ui:StylesViewModel.OutputLanguages}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" SelectedValue="{Binding TryOutputLanguage}" Margin="8,0,0,0"
+                                              MinWidth="120" VerticalAlignment="Top"
+                                              ToolTip="Type in: try a translation, as a key with this output language would (Keys page)" />
+                                    <Button Grid.Column="2" Content="Try" Command="{Binding TryStyle}" Margin="8,0,0,0" MinWidth="64"
+                                            VerticalAlignment="Top" />
+                                </Grid>
+                                <TextBlock Text="{Binding TryResult}" TextWrapping="Wrap" Margin="2,8,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Where each style is used -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Where to use them" Style="{StaticResource SectionTitle}" />
+                                <ItemsControl ItemsSource="{Binding Rules}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type ui:RuleViewModel}">
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="150" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                <ComboBox Grid.Column="1"
+                                                          ItemsSource="{Binding DataContext.Styles, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                                          DisplayMemberPath="Name" SelectedValuePath="Model.Id" SelectedValue="{Binding StyleId}" />
+                                                <Button Grid.Column="2" Content="✕" Padding="8,2" Margin="6,0,0,0" Background="Transparent"
+                                                        BorderThickness="0" ToolTip="Remove"
+                                                        Command="{Binding DataContext.RemoveRule, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                                        CommandParameter="{Binding}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Everything else" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding Styles}" DisplayMemberPath="Name"
+                                              SelectedValuePath="Model.Id" SelectedValue="{Binding DefaultStyleId}" />
+                                </Grid>
+
+                                <TextBlock Text="Add a rule" Style="{StaticResource Caption}" Margin="0,14,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox ItemsSource="{x:Static ui:StylesViewModel.RuleKinds}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" SelectedValue="{Binding NewRuleKind}" MinWidth="90" />
+                                    <ComboBox Grid.Column="1" Margin="6,0" IsEditable="True" ItemsSource="{Binding MatchSuggestions}"
+                                              Text="{Binding NewRuleMatch, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="Pick an app you dictated into recently, or type a program name or words from a website's title" />
+                                    <ComboBox Grid.Column="2" ItemsSource="{Binding Styles}" DisplayMemberPath="Name"
+                                              SelectedValuePath="Model.Id" SelectedValue="{Binding NewRuleStyleId}" />
+                                    <Button Grid.Column="3" Content="Add" Command="{Binding AddRule}" Margin="6,0,0,0" MinWidth="56" />
+                                </Grid>
+                                <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
+                                           Text="Website rules match words in the window title (e.g. Gmail) and win over app rules. Apps you dictate into show up in the list." />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Providers -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="AI providers" Style="{StaticResource SectionTitle}" />
+
+                                <TextBlock Text="Default model, used by every style unless it picks another" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox ItemsSource="{x:Static ui:StylesViewModel.DefaultProviders}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" SelectedValue="{Binding DefaultProvider}" Margin="0,0,6,0" />
+                                    <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding DefaultModelSuggestions}"
+                                              Text="{Binding DefaultModel, UpdateSourceTrigger=LostFocus}" Margin="6,0,0,0" />
+                                </Grid>
+                                <StackPanel Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,10,0,4" />
+                                    <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0"
+                                               Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
+                                </StackPanel>
+
+                                <TextBlock Text="Ollama address" Style="{StaticResource Caption}" Margin="0,14,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding OllamaUrl, UpdateSourceTrigger=LostFocus}" />
+                                    <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshOllama}" Margin="8,0,0,0" />
+                                </Grid>
+                                <TextBlock Text="{Binding OllamaStatus}" Style="{StaticResource Caption}" Margin="2,4,0,0" />
+
+                                <TextBlock Text="OpenAI API key" Style="{StaticResource Caption}" Margin="0,12,0,4" />
+                                <PasswordBox x:Name="OpenAiKeyBox" LostFocus="OpenAiKeyBox_LostFocus" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" Visibility="{Binding HasOpenAiKey, Converter={StaticResource Visible}}">
+                                    Key saved, encrypted for your Windows account. Type a new one to replace it, or
+                                    <Hyperlink Click="RemoveOpenAiKey_Click">remove it</Hyperlink>.
+                                </TextBlock>
+
+                                <TextBlock Text="Anthropic (Claude) API key" Style="{StaticResource Caption}" Margin="0,12,0,4" />
+                                <PasswordBox x:Name="AnthropicKeyBox" LostFocus="AnthropicKeyBox_LostFocus" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" Visibility="{Binding HasAnthropicKey, Converter={StaticResource Visible}}">
+                                    Key saved, encrypted for your Windows account. Type a new one to replace it, or
+                                    <Hyperlink Click="RemoveAnthropicKey_Click">remove it</Hyperlink>.
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Settings -->
+            <!-- Settings sits at the bottom of the sidebar. -->
+            <TabItem Header="Settings" Tag="&#xE713;" DockPanel.Dock="Bottom">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16">
+                    <StackPanel>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <CheckBox IsChecked="{Binding UseScreenContext}" Content="Use what's on screen" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="28,0,0,12"
+                                           Text="Reads the app you're in (text near the cursor, names like variables in VS Code) to spell things right. Done on this PC with Windows OCR; nothing leaves your machine." />
+                                <CheckBox IsChecked="{Binding RemoveFillerWords}" Content="Remove filler words (uh, um, eh)" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Microphone" Style="{StaticResource SectionTitle}" />
+                                <ComboBox ItemsSource="{Binding Microphones}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding Microphone}" />
+                                <CheckBox IsChecked="{Binding UseGpu}" Content="Use the graphics card for Whisper" Margin="0,14,0,0" />
+                                <CheckBox IsChecked="{Binding StartWithWindows}" Content="Start with Windows" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Margin="4,0,4,12" Style="{StaticResource Caption}">
+                            <Hyperlink Command="{Binding OpenDataFolder}">Open models and logs folder</Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Insights: docked at the bottom, just above Settings -->
+            <TabItem Header="Insights" Tag="&#xE9D9;" DockPanel.Dock="Bottom" x:Name="InsightsTab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16" DataContext="{Binding Insights}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="1.4*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Words per minute -->
+                            <Border Style="{StaticResource InsightCard}" Margin="0,0,10,20">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Wpm}" Style="{StaticResource InsightNumber}" />
+                                    <TextBlock Text="WORDS PER MINUTE" Style="{StaticResource InsightLabel}" />
+                                    <Grid Width="150" Height="124" Margin="0,18,0,0" HorizontalAlignment="Center">
+                                        <ui:ArcGauge Width="150" Height="150" VerticalAlignment="Top" Thickness="14"
+                                                     Value="{Binding WpmGauge}" Fill="{StaticResource Accent}" Track="{StaticResource AccentSoft}" />
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,10,0,0">
+                                            <TextBlock Text="{Binding FasterThanTyping}" FontSize="26" FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center" FontFamily="Segoe UI Variable Display, Segoe UI" />
+                                            <TextBlock Text="faster than typing" Style="{StaticResource Caption}" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Fixes -->
+                            <Border Grid.Column="1" Style="{StaticResource InsightCard}" Margin="10,0,10,20">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Fixes, StringFormat=N0}" Style="{StaticResource InsightNumber}" />
+                                    <TextBlock Text="FIXES MADE" Style="{StaticResource InsightLabel}" />
+                                    <Border Style="{StaticResource InsightRule}" />
+                                    <StackPanel>
+                                        <StackPanel.Resources>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontSize" Value="15" />
+                                                <Setter Property="Margin" Value="0,0,0,10" />
+                                                <Setter Property="TextWrapping" Value="Wrap" />
+                                            </Style>
+                                        </StackPanel.Resources>
+                                        <TextBlock><Run Text="{Binding FillerWords, Mode=OneWay}" FontWeight="SemiBold" /> filler words removed</TextBlock>
+                                        <TextBlock><Run Text="{Binding DictionaryFixes, Mode=OneWay}" FontWeight="SemiBold" /> dictionary fixes</TextBlock>
+                                        <TextBlock><Run Text="{Binding ScreenWords, Mode=OneWay}" FontWeight="SemiBold" /> names from your screen</TextBlock>
+                                        <TextBlock><Run Text="{Binding Rewrites, Mode=OneWay}" FontWeight="SemiBold" /> style rewrites</TextBlock>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Total words -->
+                            <Border Grid.Column="2" Style="{StaticResource InsightCard}" Margin="10,0,0,20">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding TotalWords, StringFormat=N0}" Style="{StaticResource InsightNumber}" />
+                                    <TextBlock Text="TOTAL WORDS DICTATED" Style="{StaticResource InsightLabel}" />
+                                    <Border Style="{StaticResource InsightRule}" />
+                                    <TextBlock Text="{Binding Comparison}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <Border Background="{StaticResource AccentSoft}" CornerRadius="10" Padding="14,10" Margin="0,16,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="&#xE916;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                                                       VerticalAlignment="Center" Foreground="{StaticResource Accent}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding TimeSaved}" FontSize="14" Margin="10,0,0,0"
+                                                       VerticalAlignment="Center" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Where you dictate -->
+                            <Border Style="{StaticResource InsightCard}" Margin="0,0,10,0">
+                                <StackPanel>
+                                    <TextBlock Text="App usage" Style="{StaticResource InsightHeading}" />
+                                    <TextBlock Text="{Binding AppsUsed}" Style="{StaticResource InsightLabel}" Margin="0,4,0,22" />
+                                    <ItemsControl ItemsSource="{Binding Categories}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type ui:CategoryRow}">
+                                                <Grid Margin="0,0,0,12">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="40" />
+                                                        <ColumnDefinition Width="{Binding BarWidth}" MinWidth="50" />
+                                                        <ColumnDefinition Width="{Binding RestWidth}" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                               FontSize="20" VerticalAlignment="Center" />
+                                                    <Border Grid.Column="1" Height="38" CornerRadius="6" Background="{Binding BarBrush}">
+                                                        <TextBlock Text="{Binding Percent}" Foreground="{Binding TextBrush}" FontWeight="Bold"
+                                                                   FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Label}" FontSize="13" FontWeight="SemiBold"
+                                                               Margin="14,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Streak -->
+                            <Border Grid.Column="1" Style="{StaticResource InsightCard}" Margin="10,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding StreakTitle}" Style="{StaticResource InsightHeading}" />
+                                    <TextBlock Text="{Binding LongestStreak}" Style="{StaticResource InsightLabel}" Margin="0,4,0,22" />
+                                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                        <StackPanel Orientation="Horizontal">
+                                            <StackPanel Margin="0,22,8,0">
+                                                <StackPanel.Resources>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                                        <Setter Property="Height" Value="24" />
+                                                        <Setter Property="Padding" Value="0,4,0,0" />
+                                                    </Style>
+                                                </StackPanel.Resources>
+                                                <TextBlock Text="Mon" /><TextBlock Text="Tue" /><TextBlock Text="Wed" /><TextBlock Text="Thu" />
+                                                <TextBlock Text="Fri" /><TextBlock Text="Sat" /><TextBlock Text="Sun" />
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding Weeks}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type ui:HeatmapWeek}">
+                                                        <StackPanel Width="24">
+                                                            <Canvas Height="22">
+                                                                <TextBlock Text="{Binding Month}" Style="{StaticResource Caption}" TextWrapping="NoWrap" />
+                                                            </Canvas>
+                                                            <ItemsControl ItemsSource="{Binding Days}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate DataType="{x:Type ui:HeatmapCell}">
+                                                                        <Border Width="20" Height="20" Margin="2" CornerRadius="5"
+                                                                                Background="{Binding Fill}" ToolTip="{Binding ToolTip}" />
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Viewbox>
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                        <TextBlock Text="Less" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <ItemsControl ItemsSource="{Binding Legend}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Width="16" Height="16" Margin="2" CornerRadius="4" Background="{Binding}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Text="More" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal" Margin="0,4,4,0">
+            <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize" Click="Minimize_Click" />
+            <Button Style="{StaticResource CaptionButton}" x:Name="MaximizeButton" Content="&#xE922;" ToolTip="Maximize" Click="Maximize_Click" />
+            <Button Style="{StaticResource CaptionButton}" Content="&#xE8BB;" ToolTip="Close" Click="Close_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

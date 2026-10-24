@@ -1,0 +1,141 @@
+using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace ZeppieSays.Core;
+
+/// <summary>One dictation key: which key starts it, which model transcribes, in which language, and what language comes out.</summary>
+public sealed class KeyBinding
+{
+    /// <summary>Output language that means "as spoken": no translation.</summary>
+    public const string SameLanguage = "same";
+
+    public string Key { get; set; } = "F8";
+    public string ModelId { get; set; } = "";
+    /// <summary>ISO language code ("nl", "en", ...) or "auto". Ignored by models that detect language themselves.</summary>
+    public string Language { get; set; } = "auto";
+    /// <summary>The language the text is typed in: <see cref="SameLanguage"/>, or an ISO code to translate into.</summary>
+    public string OutputLanguage { get; set; } = SameLanguage;
+
+    public bool Translates => OutputLanguage is { Length: > 0 } and not SameLanguage;
+}
+
+public sealed class DictionaryEntry
+{
+    /// <summary>The exact spelling that should appear in the text.</summary>
+    public string Term { get; set; } = "";
+    /// <summary>Alternative spellings the model tends to produce, replaced by <see cref="Term"/>.</summary>
+    public List<string> SoundsLike { get; set; } = [];
+}
+
+public sealed class AppSettings
+{
+    /// <summary>The dictation keys, in order ("Key 1", "Key 2", …). At least one.</summary>
+    public List<KeyBinding> Keys { get; set; } =
+    [
+        new() { Key = "F8", ModelId = "whisper-large-v3-turbo", Language = "nl" },
+        new() { Key = "F9", ModelId = "parakeet-tdt-0.6b-v2", Language = "en" },
+    ];
+    /// <summary>Settings from before any number of keys was possible; moved into <see cref="Keys"/> on load.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public KeyBinding? Primary { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public KeyBinding? Secondary { get; set; }
+    public bool UseScreenContext { get; set; } = true;
+    public bool RemoveFillerWords { get; set; } = true;
+    public bool UseGpu { get; set; } = true;
+    public bool StartWithWindows { get; set; }
+    /// <summary>NAudio WaveIn device number; -1 is the Windows default microphone.</summary>
+    public int MicrophoneDevice { get; set; } = -1;
+    public List<DictionaryEntry> Dictionary { get; set; } = [];
+    public List<Style> Styles { get; set; } = StyleDefaults.Styles();
+    /// <summary>Checked top to bottom; the first match decides the style. Website (title) rules win over app rules.</summary>
+    public List<StyleRule> StyleRules { get; set; } = StyleDefaults.Rules();
+    /// <summary>The style for every app no rule matches.</summary>
+    public string DefaultStyleId { get; set; } = StyleDefaults.RawId;
+    public LlmSettings Llm { get; set; } = new();
+    public List<SeenApp> RecentApps { get; set; } = [];
+    /// <summary>Whisper ggml files the user added by hand, outside the built-in catalog.</summary>
+    public List<CustomModel> CustomModels { get; set; } = [];
+    public NotetakerSettings Notetaker { get; set; } = new();
+}
+
+/// <summary>Transcribing audio files: every audio file put in <see cref="Folder"/> is transcribed and moved to Done.</summary>
+public sealed class NotetakerSettings
+{
+    public string Folder { get; set; } = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Zeppie Says", "Notes");
+    public string ModelId { get; set; } = "whisper-large-v3-turbo";
+    public string Language { get; set; } = "auto";
+    /// <summary>"Speaker 1:", "Speaker 2:" per paragraph, from local speaker diarization.</summary>
+    public bool LabelSpeakers { get; set; } = true;
+    /// <summary>How many people speak, when known (more reliable); 0 lets Zeppie Says work it out.</summary>
+    public int Speakers { get; set; }
+    /// <summary>A summary, decisions and action items at the top, written by the default style model.</summary>
+    public bool Summarize { get; set; } = true;
+    /// <summary>Passes the dictionary to Whisper as spelling hints.</summary>
+    public bool UseDictionary { get; set; } = true;
+    /// <summary>Shows "Record this meeting?" when Teams, Zoom or another meeting app starts using the microphone.</summary>
+    public bool AskToRecordMeetings { get; set; } = true;
+}
+
+public sealed class CustomModel
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Path { get; set; } = "";
+}
+
+public static class SettingsStore
+{
+    static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    static string FilePath => System.IO.Path.Combine(AppPaths.Data, "settings.json");
+
+    public static AppSettings Load()
+    {
+        try
+        {
+            if (File.Exists(FilePath))
+                return Parse(File.ReadAllText(FilePath));
+        }
+        catch (Exception e)
+        {
+            Log.Error("Could not read settings, using defaults", e);
+        }
+        return new AppSettings();
+    }
+
+    public static AppSettings Parse(string json) => Migrate(JsonSerializer.Deserialize<AppSettings>(json, Json) ?? new());
+
+    public static string Serialize(AppSettings settings) => JsonSerializer.Serialize(settings, Json);
+
+    /// <summary>Two fixed keys (Primary, Secondary) became a list.</summary>
+    static AppSettings Migrate(AppSettings settings)
+    {
+        if (settings.Primary is not null || settings.Secondary is not null)
+        {
+            settings.Keys = new[] { settings.Primary, settings.Secondary }.OfType<KeyBinding>().ToList();
+            settings.Primary = settings.Secondary = null;
+        }
+        if (settings.Keys.Count == 0) settings.Keys.Add(new KeyBinding());
+        return settings;
+    }
+
+    public static void Save(AppSettings settings)
+    {
+        try
+        {
+            var tmp = FilePath + ".tmp";
+            File.WriteAllText(tmp, Serialize(settings));
+            File.Move(tmp, FilePath, overwrite: true);
+        }
+        catch (Exception e)
+        {
+            Log.Error("Could not save settings", e);
+        }
+    }
+}
