@@ -33,6 +33,11 @@ public static partial class ContextCapture
         "webstorm64", "notepad++", "sublime_text", "zed",
     };
 
+    static readonly HashSet<string> Browsers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "msedge", "chrome", "firefox", "brave", "opera", "vivaldi", "arc", "zen",
+    };
+
     const int MaxSurroundingChars = 500;
 
     /// <summary>Only the window and process; cheap enough to run on every key press.</summary>
@@ -51,6 +56,38 @@ public static partial class ContextCapture
             Title = title.ToString(),
             IsCodeEditor = CodeEditors.Contains(process),
         };
+    }
+
+    /// <summary>
+    /// For a browser, adds the open tab's title and site to the window title. A browser window's title doesn't always
+    /// name the page (Edge workspaces show just "Work"), and website rules match on it. Takes a few hundred ms.
+    /// </summary>
+    public static async Task<ScreenContext> AddBrowserPageAsync(ScreenContext basic)
+    {
+        if (!Browsers.Contains(basic.ProcessName) || basic.Window == IntPtr.Zero) return basic;
+        var (name, url) = await WithTimeout(Task.Run(() => ReadBrowserPage(basic.Window)), TimeSpan.FromSeconds(2), (null, null));
+        return basic with { Title = WithPage(basic.Title, name, url) };
+    }
+
+    /// <summary>"Inbox - Outlook (outlook.office.com) - Work": the page title and site, then the window title if it adds anything.</summary>
+    public static string WithPage(string windowTitle, string? pageName, string? url)
+    {
+        var host = Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri.Host : null;
+        var page = string.Join(' ', new[] { pageName?.Trim(), host is null ? null : $"({host})" }.Where(s => !string.IsNullOrEmpty(s)));
+        if (page.Length == 0) return windowTitle;
+        if (string.IsNullOrWhiteSpace(pageName) || !windowTitle.Contains(pageName.Trim(), StringComparison.OrdinalIgnoreCase))
+            return windowTitle.Length == 0 ? page : $"{page} - {windowTitle}";
+        return host is null ? windowTitle : $"{windowTitle} ({host})";
+    }
+
+    /// <summary>The web page in a browser window: its title and address, through UI Automation.</summary>
+    static (string?, string?) ReadBrowserPage(IntPtr window)
+    {
+        var document = AutomationElement.FromHandle(window).FindFirst(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document));
+        if (document is null) return (null, null);
+        var url = document.TryGetCurrentPattern(ValuePattern.Pattern, out var v) && v is ValuePattern value ? value.Current.Value : null;
+        return (document.Current.Name, url);
     }
 
     /// <summary>Adds the text around the cursor and the identifiers visible in the window.</summary>

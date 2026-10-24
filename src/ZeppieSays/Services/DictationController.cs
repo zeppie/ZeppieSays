@@ -121,14 +121,26 @@ public sealed class DictationController : IDisposable
         _peak = 0;
         _session = new CancellationTokenSource();
         var basic = ContextCapture.Foreground();
-        _context = _settings.UseScreenContext
-            ? ContextCapture.EnrichAsync(basic, _session.Token)
-            : Task.FromResult(basic);
+        var page = ContextCapture.AddBrowserPageAsync(basic);
+        _context = CaptureAsync(basic, page, _session.Token);
         SetState(DictationState.Recording, binding);
 
         _ = _engines.GetAsync(binding.ModelId); // make sure the model is warming up
-        _rewriter.WarmUp(_rewriter.ResolveStyle(basic, binding)); // and the style's LLM, while the user talks
-        RememberApp(basic);
+        _ = PrepareStyleAsync(page, binding); // and the style's LLM, while the user talks
+    }
+
+    async Task<ScreenContext> CaptureAsync(ScreenContext basic, Task<ScreenContext> page, CancellationToken ct)
+    {
+        var enriched = _settings.UseScreenContext ? await ContextCapture.EnrichAsync(basic, ct) : basic;
+        return enriched with { Title = (await page).Title };
+    }
+
+    /// <summary>Once the browser tab is known (a website rule may pick another style), warms up the style's model.</summary>
+    async Task PrepareStyleAsync(Task<ScreenContext> page, KeyBinding binding)
+    {
+        var context = await page;
+        _rewriter.WarmUp(_rewriter.ResolveStyle(context, binding));
+        RememberApp(context);
     }
 
     async Task FinishAsync()
@@ -161,6 +173,7 @@ public sealed class DictationController : IDisposable
             LastUnedited = text;
 
             var style = _rewriter.ResolveStyle(context, binding);
+            Log.Info($"Into '{context.ProcessName}' \"{context.Title}\": style '{style.Name}'");
             var target = binding.Translates ? binding.OutputLanguage : null;
             string? notTranslated = null;
             if (style.UsesLlm && text.Trim().Length > 0)

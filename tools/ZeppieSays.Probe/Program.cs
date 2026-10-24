@@ -106,6 +106,18 @@ switch (args.FirstOrDefault())
         break;
     }
 
+    case "context": // probe context <process>  — what the app sees in that process's window, and the style it picks
+    {
+        var process = Process.GetProcessesByName(args[1]).First(p => p.MainWindowHandle != IntPtr.Zero);
+        var basic = ScreenContext.Empty with { Window = process.MainWindowHandle, ProcessName = process.ProcessName, Title = process.MainWindowTitle };
+        var watch = Stopwatch.StartNew();
+        var context = await ContextCapture.AddBrowserPageAsync(basic);
+        Console.WriteLine($"window: {basic.Title}");
+        Console.WriteLine($"title:  {context.Title} ({watch.ElapsedMilliseconds} ms)");
+        Console.WriteLine($"style:  {new ZeppieSays.Llm.TextRewriter(settings).ResolveStyle(context).Name}");
+        break;
+    }
+
     case "diarize": // probe diarize <audio file> [threshold | nN for N speakers ...]  — who speaks when
     {
         var audio = ZeppieSays.Notes.AudioFile.Load(args[1]);

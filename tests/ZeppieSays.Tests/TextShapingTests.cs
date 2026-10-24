@@ -132,6 +132,16 @@ public class TextShapingTests
     }
 
     [Theory]
+    [InlineData("Work", "Inbox - Outlook", "https://outlook.office.com/mail/", "Inbox - Outlook (outlook.office.com) - Work")]
+    [InlineData("Inbox - Outlook - Work - Microsoft Edge", "Inbox - Outlook", "https://outlook.office.com/mail/",
+        "Inbox - Outlook - Work - Microsoft Edge (outlook.office.com)")]
+    [InlineData("Work", "New Tab", "edge://newtab/", "New Tab - Work")]
+    [InlineData("Work", null, null, "Work")]
+    [InlineData("", "ChatGPT", "https://chatgpt.com/", "ChatGPT (chatgpt.com)")]
+    public void Adds_the_browser_page_to_the_window_title(string window, string? page, string? url, string expected) =>
+        Assert.Equal(expected, ContextCapture.WithPage(window, page, url));
+
+    [Theory]
     [InlineData("userId", "user id")]
     [InlineData("HttpClientFactory", "http client factory")]
     [InlineData("max_retry_count", "max retry count")]

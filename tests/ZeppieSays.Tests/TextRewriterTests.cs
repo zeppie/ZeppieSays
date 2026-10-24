@@ -22,6 +22,15 @@ public class TextRewriterTests
         Assert.Equal(expected, new TextRewriter(new AppSettings()).ResolveStyle(In(process, title)).Name);
 
     [Fact]
+    public void Picks_the_style_for_a_browser_tab_when_the_window_title_does_not_name_it()
+    {
+        var rewriter = new TextRewriter(new AppSettings());
+        Assert.Equal("Raw", rewriter.ResolveStyle(In("msedge", "Work")).Name);
+        var title = ContextCapture.WithPage("Work", "Postvak IN - Dirk Vaessen - Outlook", "https://outlook.cloud.microsoft/mail/");
+        Assert.Equal("Formal", rewriter.ResolveStyle(In("msedge", title)).Name);
+    }
+
+    [Fact]
     public void Styles_on_the_default_model_get_it_filled_in()
     {
         var settings = new AppSettings { Llm = { DefaultProvider = LlmProvider.Ollama, DefaultModel = "qwen3:8b" } };
