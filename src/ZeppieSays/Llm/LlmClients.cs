@@ -91,17 +91,47 @@ public sealed class OllamaChat(string baseUrl, string model, string keepLoaded) 
         return json?["message"]?["content"]?.GetValue<string>() ?? "";
     }
 
-    /// <summary>Loads the model into memory ahead of time so the first rewrite isn't slowed by loading.</summary>
-    public static async Task WarmUpAsync(string baseUrl, string model, string keepLoaded)
+    /// <summary>
+    /// Loads the model into memory ahead of time so the first rewrite isn't slowed by loading. While Ollama isn't
+    /// running yet (it may start after us at login), tries again every few seconds for up to <paramref name="retryFor"/>.
+    /// </summary>
+    public static async Task WarmUpAsync(string baseUrl, string model, string keepLoaded, TimeSpan retryFor = default)
+    {
+        var giveUpAt = DateTime.Now + retryFor;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var request = new JsonObject { ["model"] = model, ["keep_alive"] = KeepAlive(keepLoaded) };
+                using var response = await Http.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/api/generate", request);
+                if (attempt > 1) Log.Info($"Ollama is up; {model} loaded after {attempt} attempts");
+                return;
+            }
+            catch (HttpRequestException) when (DateTime.Now < giveUpAt)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5)); // not running (yet)
+            }
+            catch (Exception e)
+            {
+                Log.Warn($"Ollama warm-up for {model} failed: {e.Message}");
+                return;
+            }
+        }
+    }
+
+    /// <summary>Whether Ollama has the model in memory; null when Ollama can't be asked.</summary>
+    public static async Task<bool?> IsLoadedAsync(string baseUrl, string model)
     {
         try
         {
-            var request = new JsonObject { ["model"] = model, ["keep_alive"] = KeepAlive(keepLoaded) };
-            using var response = await Http.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/api/generate", request);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            var json = await Http.GetFromJsonAsync<JsonObject>($"{baseUrl.TrimEnd('/')}/api/ps", cts.Token);
+            var name = model.Contains(':') ? model : model + ":latest";
+            return json?["models"]?.AsArray().Any(m => m?["name"]?.GetValue<string>() == name) ?? false;
         }
-        catch (Exception e)
+        catch
         {
-            Log.Warn($"Ollama warm-up for {model} failed: {e.Message}");
+            return null;
         }
     }
 

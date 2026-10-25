@@ -16,6 +16,7 @@ public sealed record RewriteResult(string Text, bool Rewritten, string? Fallback
 public sealed partial class TextRewriter(AppSettings settings)
 {
     const int MaxContextChars = 300;
+    const double ColdStartSeconds = 30;
 
     /// <summary>
     /// The style for the app being dictated into, ready to use: website (window title) rules first, then app rules,
@@ -66,15 +67,18 @@ public sealed partial class TextRewriter(AppSettings settings)
     };
 
     /// <summary>Starts loading a local model while the user is still talking.</summary>
-    public void WarmUp(Style style)
+    public void WarmUp(Style style, TimeSpan retryFor = default)
     {
         style = Effective(style);
         if (style is { Provider: LlmProvider.Ollama } && style.UsesLlm)
-            _ = OllamaChat.WarmUpAsync(settings.Llm.OllamaUrl, style.Model, settings.Llm.KeepLoaded);
+            _ = OllamaChat.WarmUpAsync(settings.Llm.OllamaUrl, style.Model, settings.Llm.KeepLoaded, retryFor);
     }
 
-    /// <summary>Loads the default model right away (at startup or after changing it), so the first dictation doesn't wait.</summary>
-    public void WarmUpDefault() => WarmUp(new Style { Provider = LlmProvider.Default });
+    /// <summary>
+    /// Loads the default model right away (at startup or after changing it), so the first dictation doesn't wait.
+    /// At login Ollama may start after us, so this keeps trying for a few minutes.
+    /// </summary>
+    public void WarmUpDefault() => WarmUp(new Style { Provider = LlmProvider.Default }, TimeSpan.FromMinutes(3));
 
     /// <param name="language">The dictation's language code ("nl", "en", ...) or "auto" when the model detected it.</param>
     /// <param name="target">The language to translate into, or null to keep the dictation's language.</param>
@@ -89,8 +93,9 @@ public sealed partial class TextRewriter(AppSettings settings)
         // Small models drift into English unless told, so name the language and check the reply against it.
         var code = language is { Length: > 0 } and not "auto" ? language : GuessLanguage(text);
         var expected = target ?? code;
+        var seconds = await TimeoutSecondsAsync(style);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(settings.Llm.TimeoutSeconds));
+        timeout.CancelAfter(TimeSpan.FromSeconds(seconds));
         try
         {
             var output = await model.CompleteAsync(BuildSystemPrompt(style, context, settings.Dictionary, code, target),
@@ -103,13 +108,26 @@ public sealed partial class TextRewriter(AppSettings settings)
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new(text, false, $"no reply within {settings.Llm.TimeoutSeconds:0.#} s");
+            return new(text, false, $"no reply within {seconds:0.#} s");
         }
         catch (Exception e)
         {
             Log.Warn($"Rewrite with {style.Provider} {style.Model} failed: {e.Message}");
             return new(text, false, e is LlmException ? e.Message : "the model returned an error");
         }
+    }
+
+    /// <summary>
+    /// The usual timeout, or longer when Ollama still has to load the model from disk (it was unloaded, or Ollama
+    /// just started): that alone takes 10 seconds or more for an 8B model.
+    /// </summary>
+    async Task<double> TimeoutSecondsAsync(Style style)
+    {
+        if (style.Provider != LlmProvider.Ollama ||
+            await OllamaChat.IsLoadedAsync(settings.Llm.OllamaUrl, style.Model) != false)
+            return settings.Llm.TimeoutSeconds;
+        Log.Info($"{style.Model} isn't loaded yet; waiting up to {ColdStartSeconds} s");
+        return Math.Max(settings.Llm.TimeoutSeconds, ColdStartSeconds);
     }
 
     /// <param name="target">The language to translate into, or null to keep the dictation's language.</param>
