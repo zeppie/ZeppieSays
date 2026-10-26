@@ -43,7 +43,8 @@ public sealed partial class Summarizer(TextRewriter rewriter)
         return model;
     }
 
-    public async Task<string?> SummarizeAsync(Transcript transcript, CancellationToken ct)
+    /// <param name="context">What the user says the recording is about (people, project); helps with names and focus. May be empty.</param>
+    public async Task<string?> SummarizeAsync(Transcript transcript, CancellationToken ct, string? context = null)
     {
         if (Model() is not { } model) return null;
         var text = transcript.PlainText();
@@ -68,6 +69,8 @@ public sealed partial class Summarizer(TextRewriter rewriter)
             }
             text = "Notes on the parts of a long meeting, in order:\n" + notes;
         }
+        if (!string.IsNullOrWhiteSpace(context))
+            text = $"Background from the person who made this recording (use it for names and focus):\n{context.Trim()}\n\nTranscript:\n{text}";
         var reply = ThinkBlock().Replace(await model.CompleteAsync(Instructions, text, ct), "").Trim();
         if (reply.StartsWith("```")) reply = reply.Trim('`').Replace("markdown\n", "", StringComparison.OrdinalIgnoreCase).Trim();
         return reply.Length > 0 ? reply : null;

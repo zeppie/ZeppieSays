@@ -39,15 +39,28 @@ public sealed class NotetakerViewModel : ObservableObject
                 Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{job.TranscriptPath ?? job.AudioPath}\""));
         });
         Retry = new RelayCommand(p => { if (p is NoteJob job) _notetaker.Retry(job); });
+        StartJob = new RelayCommand(p => { if (p is NoteJob job) _notetaker.Start(job); });
+        StartAll = new RelayCommand(_ => _notetaker.StartAll());
+        DiscardJob = new RelayCommand(p =>
+        {
+            if (p is not NoteJob job) return;
+            if (job == Selected) Selected = null;
+            _notetaker.Discard(job);
+        });
 
         // Show a transcript as soon as the selected file finishes.
         Jobs.CollectionChanged += (_, e) =>
         {
             foreach (NoteJob job in e.NewItems ?? Array.Empty<NoteJob>())
+            {
                 job.PropertyChanged += (s, args) =>
                 {
                     if (args.PropertyName == nameof(NoteJob.TranscriptPath) && s == Selected) LoadPreview();
+                    if (args.PropertyName == nameof(NoteJob.IsReady)) Raise(nameof(HasSeveralReady));
                 };
+                if (job.IsReady) Selected = job; // a dropped file opens its settings straight away
+            }
+            Raise(nameof(HasSeveralReady));
         };
     }
 
@@ -74,6 +87,12 @@ public sealed class NotetakerViewModel : ObservableObject
     public RelayCommand OpenTranscript { get; }
     public RelayCommand ShowInFolder { get; }
     public RelayCommand Retry { get; }
+    public RelayCommand StartJob { get; }
+    public RelayCommand StartAll { get; }
+    public RelayCommand DiscardJob { get; }
+
+    /// <summary>More than one dropped file is waiting, so "Start all" makes sense.</summary>
+    public bool HasSeveralReady => Jobs.Count(j => j.IsReady) > 1;
 
     public string Folder => Options.Folder;
 

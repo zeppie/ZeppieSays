@@ -465,7 +465,16 @@
                         </Grid>
 
                         <!-- Preview -->
-                        <Border Grid.Column="2" Style="{StaticResource Card}" Margin="0" Padding="0">
+                        <Border Grid.Column="2" Margin="0" Padding="0">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Card}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Selected.IsReady}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
@@ -519,6 +528,83 @@
                                     </TextBlock.Visibility>
                                 </TextBlock>
                             </Grid>
+                        </Border>
+                        <!-- A dropped file waits here: its own settings, then Start -->
+                        <Border Grid.Column="2" Margin="0" Padding="0">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Card}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Selected.IsReady}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="24,20,20,20">
+                                    <TextBlock Text="{Binding Selected.Name}" Style="{StaticResource SectionTitle}" Margin="0,0,0,2"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,16"
+                                               Text="Settings for this file only. Your general Notetaker settings are on the Settings page and stay as they are." />
+
+                                    <TextBlock Text="Title" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding Selected.Options.Title, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,14"
+                                               Text="The heading of the transcript. Leave empty to use the file name." />
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="140" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Model" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                            <ComboBox ItemsSource="{Binding DataContext.InstalledModels, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                      SelectedValue="{Binding Selected.Options.ModelId}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                            <TextBlock Text="Language" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                            <ComboBox ItemsSource="{Binding DataContext.Languages, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                      SelectedValue="{Binding Selected.Options.Language}"
+                                                      ToolTip="Whisper only; Parakeet detects the language itself" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                        <CheckBox Content="Label speakers" IsChecked="{Binding Selected.Options.LabelSpeakers}"
+                                                  VerticalAlignment="Center" Margin="0,0,16,0"
+                                                  ToolTip="Speaker 1, Speaker 2 per paragraph. Downloads two small models (33 MB) the first time." />
+                                        <ComboBox ItemsSource="{x:Static ui:NotetakerViewModel.SpeakerCounts}" DisplayMemberPath="Label"
+                                                  SelectedValuePath="Value" SelectedValue="{Binding Selected.Options.SpeakersChoice}" MinWidth="104"
+                                                  IsEnabled="{Binding Selected.Options.LabelSpeakers}" VerticalAlignment="Center"
+                                                  ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
+                                    </StackPanel>
+                                    <CheckBox Content="Summary and action items" IsChecked="{Binding Selected.Options.Summarize}" Margin="0,10,0,0"
+                                              ToolTip="Written by your default style model (Styles page)" />
+                                    <CheckBox Content="Dictionary hints" IsChecked="{Binding Selected.Options.UseDictionary}" Margin="0,10,0,0"
+                                              ToolTip="Gives your dictionary words to Whisper so names are spelled right" />
+
+                                    <TextBlock Text="About this recording" Style="{StaticResource Caption}" Margin="0,18,0,4" />
+                                    <TextBox Text="{Binding Selected.Options.Context, UpdateSourceTrigger=PropertyChanged}"
+                                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72" VerticalScrollBarVisibility="Auto" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0"
+                                               Text="Optional. For example: Planning meeting with Jan de Vries and Sara about Project Aurora. Names help the spelling and the summary." />
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+                                        <Button Content="Start" Command="{Binding StartJob}" CommandParameter="{Binding Selected}"
+                                                Style="{DynamicResource AccentButtonStyle}" MinWidth="96" />
+                                        <Button Content="Remove" Command="{Binding DiscardJob}" CommandParameter="{Binding Selected}"
+                                                Margin="8,0,0,0" MinWidth="84"
+                                                ToolTip="Takes the file off the list. A copy made in the Notetaker folder is deleted; your original stays." />
+                                        <Button Content="Start all" Command="{Binding StartAll}" Margin="8,0,0,0"
+                                                Visibility="{Binding HasSeveralReady, Converter={StaticResource Visible}}"
+                                                ToolTip="Starts every waiting file, each with its own settings" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Border>
                     </Grid>
                 </Grid>

@@ -8,7 +8,7 @@ using ZeppieSays.UI;
 
 namespace ZeppieSays.Notes;
 
-public enum NoteStatus { Waiting, Working, Done, Failed }
+public enum NoteStatus { Waiting, Working, Done, Failed, Ready }
 
 /// <summary>One audio file in the Notetaker list, from waiting in the folder to a finished transcript.</summary>
 public sealed class NoteJob(string audioPath) : ObservableObject
@@ -16,7 +16,10 @@ public sealed class NoteJob(string audioPath) : ObservableObject
     public string AudioPath { get; set; } = audioPath;
     public string Name => Path.GetFileNameWithoutExtension(AudioPath);
 
-    public NoteStatus Status { get => _status; set { if (Set(ref _status, value)) { Raise(nameof(IsWorking)); Raise(nameof(IsDone)); Raise(nameof(IsFailed)); } } }
+    /// <summary>Settings for this file alone; null means the general Notetaker settings at the time it runs.</summary>
+    public NoteOptions? Options { get; set; }
+
+    public NoteStatus Status { get => _status; set { if (Set(ref _status, value)) { Raise(nameof(IsWorking)); Raise(nameof(IsDone)); Raise(nameof(IsFailed)); Raise(nameof(IsReady)); } } }
     NoteStatus _status;
 
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
@@ -34,6 +37,8 @@ public sealed class NoteJob(string audioPath) : ObservableObject
     public bool IsWorking => Status == NoteStatus.Working;
     public bool IsDone => Status == NoteStatus.Done;
     public bool IsFailed => Status == NoteStatus.Failed;
+    /// <summary>Dropped by the user and waiting for them to adjust its settings and press Start.</summary>
+    public bool IsReady => Status == NoteStatus.Ready;
 }
 
 /// <summary>
@@ -44,6 +49,8 @@ public sealed class NoteJob(string audioPath) : ObservableObject
 public sealed class Notetaker : IDisposable
 {
     const string DoneFolder = "Done";
+    /// <summary>Whisper only reads about 220 tokens of prompt; a short description of the recording is enough.</summary>
+    const int MaxContextChars = 300;
 
     readonly AppSettings _settings;
     readonly EngineCache _engines;
@@ -55,6 +62,9 @@ public sealed class Notetaker : IDisposable
     readonly SemaphoreSlim _work = new(0);
     readonly CancellationTokenSource _stop = new();
     FileSystemWatcher? _watcher;
+    /// <summary>Dropped files that wait for the user's go-ahead once they show up in the folder, and the ones we copied there.</summary>
+    readonly HashSet<string> _review = new(StringComparer.OrdinalIgnoreCase);
+    readonly HashSet<string> _copied = new(StringComparer.OrdinalIgnoreCase);
 
     public ObservableCollection<NoteJob> Jobs { get; } = [];
 
@@ -102,17 +112,23 @@ public sealed class Notetaker : IDisposable
             Enqueue(file);
     }
 
-    /// <summary>Copies files the user dropped onto the page into the folder; the folder watch picks them up.</summary>
+    /// <summary>
+    /// Copies files the user dropped onto the page into the folder; the folder watch picks them up. They wait as
+    /// Ready until the user has looked at their settings and pressed Start.
+    /// </summary>
     public void AddFiles(IEnumerable<string> paths)
     {
         foreach (var path in paths.Where(AudioFile.IsAudio))
         {
             if (Path.GetDirectoryName(Path.GetFullPath(path))!.Equals(Path.GetFullPath(Options.Folder).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
             {
+                _review.Add(Path.GetFullPath(path));
                 Enqueue(path);
                 continue;
             }
             var target = UniquePath(Options.Folder, Path.GetFileName(path));
+            _review.Add(Path.GetFullPath(target));
+            _copied.Add(Path.GetFullPath(target));
             _ = Task.Run(() =>
             {
                 try { File.Copy(path, target); }
@@ -129,10 +145,45 @@ public sealed class Notetaker : IDisposable
         _work.Release();
     }
 
+    /// <summary>Starts a dropped file with the settings the user chose for it.</summary>
+    public void Start(NoteJob job)
+    {
+        if (!job.IsReady) return;
+        job.Status = NoteStatus.Waiting;
+        job.StatusText = "Waiting";
+        _work.Release();
+    }
+
+    public void StartAll()
+    {
+        foreach (var job in Jobs.Where(j => j.IsReady).Reverse().ToList()) Start(job);
+    }
+
+    /// <summary>Takes a file that hasn't started off the list. A copy we made in the folder goes too; the original is never touched.</summary>
+    public void Discard(NoteJob job)
+    {
+        if (!job.IsReady) return;
+        Jobs.Remove(job);
+        var path = Path.GetFullPath(job.AudioPath);
+        if (!_copied.Remove(path)) return;
+        try { File.Delete(path); }
+        catch (Exception e) { Log.Warn($"Could not delete the copy {path}: {e.Message}"); }
+    }
+
     void Enqueue(string path)
     {
         if (!AudioFile.IsAudio(path) || Jobs.Any(j => j.AudioPath.Equals(path, StringComparison.OrdinalIgnoreCase)))
             return;
+        if (_review.Remove(Path.GetFullPath(path)))
+        {
+            Jobs.Insert(0, new NoteJob(path)
+            {
+                Status = NoteStatus.Ready,
+                StatusText = "Ready · adjust its settings, then start",
+                Options = NoteOptions.From(Options),
+            });
+            return;
+        }
         Jobs.Insert(0, new NoteJob(path));
         _work.Release();
     }
@@ -162,7 +213,8 @@ public sealed class Notetaker : IDisposable
             Report("Waiting for the file to finish copying");
             await WaitUntilReadyAsync(job.AudioPath, ct);
 
-            var model = _models.Find(Options.ModelId)
+            var options = job.Options ?? NoteOptions.From(Options);
+            var model = _models.Find(options.ModelId)
                 ?? throw new InvalidOperationException("Pick an installed model on the Notetaker page.");
 
             Report("Reading audio");
@@ -171,18 +223,18 @@ public sealed class Notetaker : IDisposable
             var duration = TimeSpan.FromSeconds(tracks[0].Length / (double)Audio.SampleRate);
             Log.Info($"Notetaker: {Path.GetFileName(job.AudioPath)}, {duration.TotalMinutes:F1} min{(recording is null ? "" : ", meeting recording")}");
 
-            var transcript = new Transcript { Title = job.Name, Duration = duration, ModelName = model.Info.Name };
+            var transcript = new Transcript { Title = options.Title.Trim() is { Length: > 0 } title ? title : job.Name, Duration = duration, ModelName = model.Info.Name };
             var turns = recording is null
-                ? await FileTurnsAsync(tracks[0], transcript, Report, ct)
-                : await MeetingTurnsAsync(tracks[0], tracks[1], transcript, Report, ct);
+                ? await FileTurnsAsync(tracks[0], options, transcript, Report, ct)
+                : await MeetingTurnsAsync(tracks[0], tracks[1], options, transcript, Report, ct);
 
             using (_engines.Hold(model.Info.Id))
-                await TranscribeAsync(turns, model, transcript, Report, ct);
+                await TranscribeAsync(turns, model, options, transcript, Report, ct);
 
-            if (Options.Summarize && transcript.Paragraphs.Sum(p => p.Text.Length) > 200)
+            if (options.Summarize && transcript.Paragraphs.Sum(p => p.Text.Length) > 200)
             {
                 Report("Writing the summary");
-                try { transcript.Notes = await _summarizer.SummarizeAsync(transcript, ct); }
+                try { transcript.Notes = await _summarizer.SummarizeAsync(transcript, ct, options.Context); }
                 catch (Exception e) when (e is not OperationCanceledException)
                 {
                     Log.Warn($"Notetaker summary failed: {e.Message}");
@@ -216,9 +268,10 @@ public sealed class Notetaker : IDisposable
     sealed record Turn(float[] Track, int Start, int End, string? Speaker);
 
     /// <summary>An ordinary audio file: speaker detection on the whole file when asked for, otherwise one long turn.</summary>
-    async Task<List<Turn>> FileTurnsAsync(float[] samples, Transcript transcript, Action<string, double> report, CancellationToken ct)
+    async Task<List<Turn>> FileTurnsAsync(float[] samples, NoteOptions options, Transcript transcript, Action<string, double> report,
+        CancellationToken ct)
     {
-        if (Options.LabelSpeakers && await FindSpeakersAsync(samples, Options.Speakers, report, ct) is { } speakers)
+        if (options.LabelSpeakers && await FindSpeakersAsync(samples, options.SpeakerCount, report, ct) is { } speakers)
             return await NameSpeakersAsync(samples, speakers, transcript, report, ct);
         return [new Turn(samples, 0, samples.Length, null)];
     }
@@ -227,16 +280,16 @@ public sealed class Notetaker : IDisposable
     /// A two-track meeting recording: everything on the microphone track is the user (minus echo of the call),
     /// and only the call track needs speaker detection.
     /// </summary>
-    async Task<List<Turn>> MeetingTurnsAsync(float[] mic, float[] call, Transcript transcript, Action<string, double> report,
-        CancellationToken ct)
+    async Task<List<Turn>> MeetingTurnsAsync(float[] mic, float[] call, NoteOptions options, Transcript transcript,
+        Action<string, double> report, CancellationToken ct)
     {
         var me = UserName.First is { Length: > 0 } first ? first : "You";
         var mine = AudioFile.SpeechRegions(mic, call);
         var turns = mine.Select(r => new Turn(mic, r.Start, r.End, me)).ToList();
 
         // The people-count setting includes the user, who is on the other track.
-        var others = Options.Speakers > 1 ? Options.Speakers - 1 : 0;
-        if (Options.LabelSpeakers && await FindSpeakersAsync(call, others, report, ct) is { } speakers)
+        var others = options.SpeakerCount > 1 ? options.SpeakerCount - 1 : 0;
+        if (options.LabelSpeakers && await FindSpeakersAsync(call, others, report, ct) is { } speakers)
             turns.AddRange(await NameSpeakersAsync(call, speakers, transcript, report, ct));
         else
             turns.AddRange(AudioFile.SpeechRegions(call).Select(r => new Turn(call, r.Start, r.End, "Others")));
@@ -297,14 +350,21 @@ public sealed class Notetaker : IDisposable
         return speakers.Select(t => new Turn(samples, t.Start, t.End, labels[t.Speaker])).ToList();
     }
 
-    async Task TranscribeAsync(IReadOnlyList<Turn> turns, InstalledModel model, Transcript transcript,
+    async Task TranscribeAsync(IReadOnlyList<Turn> turns, InstalledModel model, NoteOptions options, Transcript transcript,
         Action<string, double> report, CancellationToken ct)
     {
         var engine = await _engines.GetAsync(model.Info.Id);
-        var prompt = Options.UseDictionary && model.Info.SupportsPrompt
-            ? TextShaping.BuildPrompt(_settings.AllWords, ScreenContext.Empty)
-            : "";
-        var language = model.Info.AutoLanguageOnly ? "auto" : Options.Language;
+        var prompt = "";
+        if (model.Info.SupportsPrompt)
+        {
+            // What the user says the recording is about steers Whisper's spelling, like a line of preceding text.
+            var about = options.Context.Trim();
+            if (about.Length > MaxContextChars) about = about[..MaxContextChars];
+            prompt = (about.Length > 0 ? about + " " : "") +
+                     (options.UseDictionary ? TextShaping.BuildPrompt(_settings.AllWords, ScreenContext.Empty) : "");
+            prompt = prompt.Trim();
+        }
+        var language = model.Info.AutoLanguageOnly ? "auto" : options.Language;
         var pieces = turns.Select(t => (Turn: t, Pieces: AudioFile.Split(t.Track, t.Start, t.End))).ToList();
         var total = Math.Max(1, pieces.Sum(p => p.Pieces.Count));
         var done = 0;
