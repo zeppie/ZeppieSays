@@ -216,6 +216,14 @@ public sealed class NotetakerViewModel : ObservableObject
     public ObservableCollection<TranscriptLineViewModel> Lines { get; } = [];
     public ObservableCollection<SpeakerRowViewModel> SpeakerRows { get; } = [];
 
+    /// <summary>Who talks when, in each speaker's colour, for colouring the waveform.</summary>
+    public IReadOnlyList<ColoredSegment> WaveSegments
+    {
+        get => _waveSegments;
+        private set => Set(ref _waveSegments, value);
+    }
+    IReadOnlyList<ColoredSegment> _waveSegments = [];
+
     /// <summary>Whether the selected transcript has saved speaker segments. Older ones don't.</summary>
     public bool HasTimeline => _timeline is { Segments.Count: > 0 };
     public bool HasSpeakers => SpeakerRows.Count > 0;
@@ -329,6 +337,7 @@ public sealed class NotetakerViewModel : ObservableObject
         _currentLine = -1;
         _matches = [];
         Summary = "";
+        WaveSegments = [];
         if (Selected is not { IsDone: true, TranscriptPath: { } path } || !File.Exists(path))
         {
             RaiseTimeline();
@@ -352,6 +361,7 @@ public sealed class NotetakerViewModel : ObservableObject
             SpeakerRows.Add(new SpeakerRowViewModel(label, BrushFor(label), segments,
                 canRename: label != me && voiceprints.ContainsKey(label), name => NameSpeaker(path, label, name)));
         }
+        WaveSegments = SpeakerRows.SelectMany(r => r.Segments.Select(s => new ColoredSegment(s.Start, s.End, r.Brush))).ToList();
         UpdateMatches();
         UpdateCurrentLine();
         RaiseTimeline();

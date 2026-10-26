@@ -77,10 +77,47 @@ public abstract class SeekableControl : FrameworkElement
     }
 }
 
-/// <summary>The loudness of the whole recording as bars; the part already played is coloured.</summary>
+/// <summary>A stretch of the recording in one speaker's colour.</summary>
+public sealed record ColoredSegment(double Start, double End, Brush Brush);
+
+/// <summary>
+/// The loudness of the whole recording as bars. Where speakers are known each bar has the colour of whoever talks
+/// there, bright in the part already played and faded in the rest; otherwise the played part is purple.
+/// </summary>
 public sealed class WaveformView : SeekableControl
 {
     const double BarWidth = 2, BarGap = 1;
+
+    static readonly Brush PlayedSilence = Frozen(new SolidColorBrush(Color.FromArgb(0xA0, 0x80, 0x80, 0x80)));
+
+    public static readonly DependencyProperty SegmentsProperty = DependencyProperty.Register(
+        nameof(Segments), typeof(IReadOnlyList<ColoredSegment>), typeof(WaveformView),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public IReadOnlyList<ColoredSegment>? Segments { get => (IReadOnlyList<ColoredSegment>?)GetValue(SegmentsProperty); set => SetValue(SegmentsProperty, value); }
+
+    // Which speaker's colour each bar gets only changes with the width, the length or the segments, not with the playhead.
+    Brush?[]? _barColors;
+    (IReadOnlyList<ColoredSegment>? Segments, int Bars, double Duration) _barKey;
+
+    Brush?[]? BarColors(int bars)
+    {
+        if (Segments is not { Count: > 0 } segments || Duration <= 0) return null;
+        if (_barColors is not null && _barKey == (segments, bars, Duration)) return _barColors;
+        var colors = new Brush?[bars];
+        for (var bar = 0; bar < bars; bar++)
+        {
+            var at = (bar + 0.5) / bars * Duration;
+            foreach (var segment in segments)
+                if (segment.Start <= at && at < segment.End)
+                {
+                    colors[bar] = segment.Brush;
+                    break;
+                }
+        }
+        _barKey = (segments, bars, Duration);
+        return _barColors = colors;
+    }
 
     public static readonly DependencyProperty PeaksProperty = DependencyProperty.Register(
         nameof(Peaks), typeof(float[]), typeof(WaveformView),
@@ -96,6 +133,7 @@ public sealed class WaveformView : SeekableControl
         var bars = Math.Max(1, (int)(ActualWidth / (BarWidth + BarGap)));
         var middle = ActualHeight / 2;
         var playedX = PlayheadX;
+        var colors = BarColors(bars);
         for (var bar = 0; bar < bars; bar++)
         {
             var from = bar * peaks.Length / bars;
@@ -104,7 +142,11 @@ public sealed class WaveformView : SeekableControl
             for (var i = from; i < Math.Min(to, peaks.Length); i++) peak = Math.Max(peak, peaks[i]);
             var height = Math.Max(2, peak * (ActualHeight - 4));
             var x = bar * (BarWidth + BarGap);
-            dc.DrawRoundedRectangle(x < playedX ? Accent : Muted, null, new Rect(x, middle - height / 2, BarWidth, height), 1, 1);
+            var played = x < playedX;
+            Brush brush = colors is null ? (played ? Accent : Muted)
+                : colors[bar] is { } speaker ? (played ? speaker : SpeakerColors.Faded(speaker))
+                : (played ? PlayedSilence : Muted);
+            dc.DrawRoundedRectangle(brush, null, new Rect(x, middle - height / 2, BarWidth, height), 1, 1);
         }
         DrawPlayhead(dc);
     }
@@ -153,4 +195,20 @@ public static class SpeakerColors
     }
 
     public static Brush For(int index) => Palette[index % Palette.Length];
+
+    static readonly Dictionary<Brush, Brush> FadedBrushes = [];
+
+    /// <summary>The same colour, see-through, for the part of the recording that hasn't been played yet.</summary>
+    public static Brush Faded(Brush brush)
+    {
+        lock (FadedBrushes)
+        {
+            if (FadedBrushes.TryGetValue(brush, out var faded)) return faded;
+            faded = brush is SolidColorBrush solid
+                ? new SolidColorBrush(Color.FromArgb(0x66, solid.Color.R, solid.Color.G, solid.Color.B))
+                : brush;
+            faded.Freeze();
+            return FadedBrushes[brush] = faded;
+        }
+    }
 }

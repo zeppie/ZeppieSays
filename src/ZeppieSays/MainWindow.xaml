@@ -649,6 +649,7 @@
                                             <TextBlock Text="{Binding Selected.Name}" Foreground="#E6E8EC" FontSize="14" FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis" />
                                             <ui:WaveformView Grid.Row="1" Margin="0,10,0,0" Peaks="{Binding Peaks}" Duration="{Binding Duration}"
+                                                             Segments="{Binding WaveSegments}"
                                                              Position="{Binding Playback.Position}" SeekCommand="{Binding SeekCommand}" />
                                         </Grid>
                                         <TextBlock Text="The audio or video file is no longer next to its transcript, so it can't be played."
@@ -661,52 +662,46 @@
                                 <!-- Play, the time, and for a video a strip to jump around in -->
                                 <Border Grid.Row="1" Style="{StaticResource Card}" Padding="12,8" Margin="0,10,0,0"
                                         Visibility="{Binding Playback.IsOpen, Converter={StaticResource Visible}}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Button Command="{Binding Playback.PlayPauseCommand}" Width="40" Height="40" Padding="0"
-                                                Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="Play or pause">
-                                            <TextBlock Text="{Binding Playback.PlayGlyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" />
-                                        </Button>
-                                        <TextBlock Grid.Column="1" Text="{Binding Playback.TimeText}" Margin="14,0,0,0" VerticalAlignment="Center"
-                                                   FontFamily="Consolas" />
-                                        <ui:WaveformView Grid.Column="2" Height="40" Margin="16,0,4,0" Peaks="{Binding Peaks}" Duration="{Binding Duration}"
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Command="{Binding Playback.PlayPauseCommand}" Width="40" Height="40" Padding="0"
+                                                    Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="Play or pause">
+                                                <TextBlock Text="{Binding Playback.PlayGlyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" />
+                                            </Button>
+                                            <TextBlock Text="{Binding Playback.TimeText}" Margin="14,0,0,0" VerticalAlignment="Center" FontFamily="Consolas" />
+                                        </StackPanel>
+                                        <!-- 7 px + the card's 12 px + 1 px border = the 20 px the speaker bars and the audio waveform are inset by -->
+                                        <ui:WaveformView Height="40" Margin="7,10,7,0" Peaks="{Binding Peaks}" Duration="{Binding Duration}"
+                                                         Segments="{Binding WaveSegments}"
                                                          Position="{Binding Playback.Position}" SeekCommand="{Binding SeekCommand}"
                                                          Visibility="{Binding Playback.ShowVideo, Converter={StaticResource Visible}}" />
-                                    </Grid>
+                                    </StackPanel>
                                 </Border>
 
                                 <!-- Who spoke when; click a bar to jump there, click a name to change it -->
-                                <Border Grid.Row="2" Style="{StaticResource Card}" Padding="14,10" Margin="0,10,0,0"
+                                <Border Grid.Row="2" Style="{StaticResource Card}" Padding="19,10" Margin="0,10,0,0"
                                         Visibility="{Binding HasSpeakers, Converter={StaticResource Visible}}">
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource Caption}" Margin="4,0,0,4"
+                                        <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,4"
                                                    Text="The timeline is available for files transcribed from now on. Names can still be changed."
                                                    Visibility="{Binding ShowTimelineHint, Converter={StaticResource Visible}}" />
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="210">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="280">
                                             <ItemsControl ItemsSource="{Binding SpeakerRows}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="{x:Type ui:SpeakerRowViewModel}">
-                                                        <Grid Margin="0,2">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="168" />
-                                                                <ColumnDefinition Width="*" />
-                                                            </Grid.ColumnDefinitions>
+                                                        <StackPanel Margin="0,0,0,6">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <Ellipse Width="10" Height="10" Fill="{Binding Brush}" VerticalAlignment="Center" Margin="4,0,6,0" />
+                                                                <Ellipse Width="9" Height="9" Fill="{Binding Brush}" VerticalAlignment="Center" Margin="0,0,6,5" />
                                                                 <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsReadOnly}"
-                                                                         Width="140" BorderThickness="0" Background="Transparent" Padding="4,3"
+                                                                         MinWidth="140" BorderThickness="0" Background="Transparent" Padding="2,2" FontSize="13"
                                                                          VerticalAlignment="Center" KeyDown="SpeakerName_KeyDown"
                                                                          ToolTip="{Binding Label}" />
                                                             </StackPanel>
-                                                            <ui:SegmentTrack Grid.Column="1" Height="24" Segments="{Binding Segments}" Brush="{Binding Brush}"
+                                                            <ui:SegmentTrack Height="22" Segments="{Binding Segments}" Brush="{Binding Brush}"
                                                                              Duration="{Binding DataContext.Duration, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                              Position="{Binding DataContext.Playback.Position, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                              SeekCommand="{Binding DataContext.SeekCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
-                                                        </Grid>
+                                                        </StackPanel>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
