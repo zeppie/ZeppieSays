@@ -17,6 +17,36 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
         <ui:EmptyToVisibleConverter x:Key="EmptyToVisible" />
+        <DataTemplate x:Key="LoadedRow" DataType="{x:Type ui:LoadedModelRow}">
+            <Grid Margin="0,4" Opacity="{Binding Dim}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="84" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" />
+                    <TextBlock Text="{Binding Error}" Foreground="#E5484D" FontSize="12">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Error}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+                <Border Grid.Column="1" Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="8,2"
+                        VerticalAlignment="Center" Margin="0,0,12,0">
+                    <TextBlock Text="{Binding Where}" FontSize="12" />
+                </Border>
+                <Button Grid.Column="2" Content="{Binding ActionLabel}" Command="{Binding Action}"
+                        IsEnabled="{Binding CanAct}" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+            </Grid>
+        </DataTemplate>
 
         <!-- Sidebar navigation: each tab is an icon and a label; the selected one gets a soft fill. -->
         <Style x:Key="NavItem" TargetType="TabItem">
@@ -626,6 +656,49 @@
             <TabItem Header="Models" Tag="&#xE8F1;" x:Name="ModelsTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16">
                     <StackPanel>
+                        <!-- What is in memory right now, and where it runs. -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="In memory now" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
+                                        <TextBlock Style="{StaticResource Caption}"
+                                                   Text="A loaded model answers at once. An unloaded one is read from disk first, which takes seconds. Unloading frees graphics memory for games or video calls." />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Unload all" Command="{Binding Loaded.UnloadAll}"
+                                            IsEnabled="{Binding Loaded.HasLoaded}" VerticalAlignment="Top" Margin="12,0,0,0" />
+                                </Grid>
+                                <StackPanel Margin="0,12,0,0" Visibility="{Binding Loaded.HasGpuInfo, Converter={StaticResource Visible}}">
+                                    <ProgressBar Value="{Binding Loaded.GpuFraction, Mode=OneWay}" Maximum="1" Height="6" />
+                                    <TextBlock Text="{Binding Loaded.GpuText}" Style="{StaticResource Caption}" Margin="0,4,0,0" />
+                                </StackPanel>
+
+                                <TextBlock Text="Speech models" FontWeight="SemiBold" Margin="0,16,0,4" />
+                                <ItemsControl ItemsSource="{Binding Loaded.SpeechRows}" ItemTemplate="{StaticResource LoadedRow}" />
+                                <TextBlock Text="Install a speech model below to see it here.">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Loaded.SpeechRows.Count}" Value="0">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <TextBlock Text="Text models (Ollama)" FontWeight="SemiBold" Margin="0,16,0,4" />
+                                <TextBlock Text="Ollama isn't running, so nothing can be shown or loaded here." Style="{StaticResource Caption}"
+                                           Foreground="#E5484D" Visibility="{Binding Loaded.OllamaDown, Converter={StaticResource Visible}}" />
+                                <ItemsControl ItemsSource="{Binding Loaded.TextRows}" ItemTemplate="{StaticResource LoadedRow}" />
+                            </StackPanel>
+                        </Border>
+
                         <ItemsControl ItemsSource="{Binding Catalog}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type ui:ModelRowViewModel}">

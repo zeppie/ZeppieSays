@@ -19,10 +19,16 @@ public partial class MainWindow : Window
             if (Tabs.SelectedItem == StylesTab) model.Styles.Refresh();
             // The streak and heatmap move on at midnight, without a new dictation.
             if (Tabs.SelectedItem == HomeTab || Tabs.SelectedItem == InsightsTab) model.Insights.Refresh();
+            UpdateLoadedModelsPolling();
         };
+        IsVisibleChanged += (_, _) => UpdateLoadedModelsPolling();
     }
 
     MainViewModel Model => (MainViewModel)DataContext;
+
+    /// <summary>The loaded-models panel asks Ollama only while you can see it.</summary>
+    void UpdateLoadedModelsPolling() =>
+        Model.Loaded.SetActive(IsVisible && WindowState != WindowState.Minimized && Tabs.SelectedItem == ModelsTab);
 
     // Our own caption buttons, since the sidebar is drawn into the title bar.
     void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -38,6 +44,7 @@ public partial class MainWindow : Window
         MaximizeButton.Content = maximized ? "" : "";
         MaximizeButton.ToolTip = maximized ? "Restore" : "Maximize";
         base.OnStateChanged(e);
+        UpdateLoadedModelsPolling();
     }
 
     void Notetaker_DragOver(object sender, DragEventArgs e)

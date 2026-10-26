@@ -19,6 +19,7 @@ public sealed class MainViewModel : ObservableObject
 
     public StylesViewModel Styles { get; }
     public InsightsViewModel Insights { get; }
+    public LoadedModelsViewModel Loaded { get; }
     public NotetakerViewModel Notetaker { get; }
     /// <summary>The dictation keys, in the order of <see cref="AppSettings.Keys"/>.</summary>
     public ObservableCollection<BindingViewModel> Keys { get; } = [];
@@ -46,6 +47,7 @@ public sealed class MainViewModel : ObservableObject
         SetUpSettingsFolder();
         Styles = new StylesViewModel(settings, rewriter, Save);
         Insights = new InsightsViewModel(usage);
+        Loaded = new LoadedModelsViewModel(settings, models, engines);
         Notetaker = new NotetakerViewModel(settings, notetaker, summarizer, voices, meetings, Save);
         _settings = settings;
         _models = models;

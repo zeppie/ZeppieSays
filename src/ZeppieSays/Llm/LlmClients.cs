@@ -51,6 +51,13 @@ public sealed class LlmException(string message) : Exception(message)
     }
 }
 
+/// <summary>A model Ollama has in memory: its total size, how much of that is in graphics memory, and when it unloads itself.</summary>
+public sealed record OllamaLoadedModel(string Name, long SizeBytes, long VramBytes, DateTimeOffset? ExpiresAt)
+{
+    /// <summary>Ollama reports a "keep forever" model as expiring centuries from now.</summary>
+    public bool StaysLoaded => ExpiresAt is { } at && at > DateTimeOffset.Now.AddYears(1);
+}
+
 /// <summary>Local models through Ollama's HTTP API. Nothing leaves the machine.</summary>
 public sealed class OllamaChat(string baseUrl, string model, string keepLoaded) : IChatModel
 {
@@ -132,6 +139,45 @@ public sealed class OllamaChat(string baseUrl, string model, string keepLoaded) 
         catch
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Every model Ollama holds in memory right now, with how much of it sits in graphics memory;
+    /// null when Ollama can't be asked.
+    /// </summary>
+    public static async Task<IReadOnlyList<OllamaLoadedModel>?> ListLoadedAsync(string baseUrl)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            var json = await Http.GetFromJsonAsync<JsonObject>($"{baseUrl.TrimEnd('/')}/api/ps", cts.Token);
+            return json?["models"]?.AsArray()
+                .Select(m => new OllamaLoadedModel(
+                    m?["name"]?.GetValue<string>() ?? "",
+                    m?["size"]?.GetValue<long>() ?? 0,
+                    m?["size_vram"]?.GetValue<long>() ?? 0,
+                    DateTimeOffset.TryParse(m?["expires_at"]?.GetValue<string>(), out var expires) ? expires : null))
+                .Where(m => m.Name.Length > 0)
+                .ToList() ?? [];
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Frees the model's memory right away (keep_alive 0). The next request loads it again.</summary>
+    public static async Task UnloadAsync(string baseUrl, string model)
+    {
+        try
+        {
+            var request = new JsonObject { ["model"] = model, ["keep_alive"] = 0 };
+            using var response = await Http.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/api/generate", request);
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"Unloading {model} from Ollama failed: {e.Message}");
         }
     }
 
