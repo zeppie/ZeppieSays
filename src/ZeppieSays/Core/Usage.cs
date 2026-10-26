@@ -62,7 +62,7 @@ public static class UsageCategories
 public sealed class UsageStore
 {
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
-    static string FilePath => Path.Combine(AppPaths.Data, "usage.json");
+    static string FilePath => Path.Combine(AppPaths.Settings, "usage.json");
 
     readonly SortedDictionary<DateOnly, DayUsage> _days = [];
 
@@ -99,6 +99,7 @@ public sealed class UsageStore
     public void Record(DictationUsage usage)
     {
         if (usage.Words == 0) return;
+        ReloadFromDisk(); // another PC may have added to the same file (a settings folder in OneDrive)
         Add(DateOnly.FromDateTime(DateTime.Now), usage);
         Save();
         Changed?.Invoke();
@@ -120,6 +121,22 @@ public sealed class UsageStore
         day.CategoryDictations[category] = day.CategoryDictations.GetValueOrDefault(category) + 1;
         if (usage.ProcessName.Length > 0)
             day.Apps[usage.ProcessName] = day.Apps.GetValueOrDefault(usage.ProcessName) + usage.Words;
+    }
+
+    void ReloadFromDisk()
+    {
+        try
+        {
+            if (!File.Exists(FilePath)) return;
+            var days = JsonSerializer.Deserialize<List<DayUsage>>(File.ReadAllText(FilePath), Json);
+            if (days is null) return;
+            _days.Clear();
+            foreach (var day in days) _days[day.Date] = day;
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"Could not re-read usage stats, keeping what's in memory: {e.Message}");
+        }
     }
 
     void Save()

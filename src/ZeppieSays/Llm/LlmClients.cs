@@ -174,7 +174,7 @@ public sealed partial class OpenAiChat(string apiKey, string model) : IChatModel
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // slow right after startup sometimes
             using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/models");
             request.Headers.Authorization = new("Bearer", apiKey);
             using var response = await Http.SendAsync(request, cts.Token);

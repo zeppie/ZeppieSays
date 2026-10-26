@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using Microsoft.Win32;
 using ZeppieSays.Core;
 using ZeppieSays.Engines;
@@ -40,8 +41,10 @@ public sealed class MainViewModel : ObservableObject
 
     public MainViewModel(AppSettings settings, ModelManager models, EngineCache engines, KeyboardHook hook, Llm.TextRewriter rewriter,
         UsageStore usage, Notes.Notetaker notetaker, Notes.Summarizer summarizer, Notes.VoiceLibrary voices,
-        MeetingController meetings)
+        MeetingController meetings, DictionaryFiles dictionaryFiles)
     {
+        SetUpDictionaryFiles(dictionaryFiles);
+        SetUpSettingsFolder();
         Styles = new StylesViewModel(settings, rewriter, Save);
         Insights = new InsightsViewModel(usage);
         Notetaker = new NotetakerViewModel(settings, notetaker, summarizer, voices, meetings, Save);
@@ -196,17 +199,8 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>"Betabit" or "Betabit = beta bit, beta bid".</summary>
     public void AddWord()
     {
-        var parts = NewWord.Split('=', 2);
-        var term = parts[0].Trim();
-        if (term.Length == 0) return;
-        var entry = new DictionaryEntry
-        {
-            Term = term,
-            SoundsLike = parts.Length > 1
-                ? parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
-                : [],
-        };
-        var existing = _settings.Dictionary.FindIndex(d => d.Term.Equals(term, StringComparison.OrdinalIgnoreCase));
+        if (DictionaryEntry.Parse(NewWord) is not { } entry) return;
+        var existing = _settings.Dictionary.FindIndex(d => d.Term.Equals(entry.Term, StringComparison.OrdinalIgnoreCase));
         if (existing >= 0)
         {
             Dictionary.Remove(_settings.Dictionary[existing]);
@@ -255,6 +249,156 @@ public sealed class MainViewModel : ObservableObject
     }
 
     void Save() => SettingsStore.Save(_settings);
+
+    // ---- Dictionary files -----------------------------------------------------------------------
+
+    public ObservableCollection<DictionaryFile> DictionaryFileList { get; } = [];
+    public RelayCommand AddDictionaryFile { get; private set; } = null!;
+    public RelayCommand NewDictionaryFile { get; private set; } = null!;
+    public RelayCommand RemoveDictionaryFile { get; private set; } = null!;
+    public RelayCommand OpenDictionaryFile { get; private set; } = null!;
+    public RelayCommand SaveWordsAsFile { get; private set; } = null!;
+
+    const string FileHeader =
+        "Zeppie Says dictionary: one word per line.\n" +
+        "To fix a word the model keeps getting wrong: Betabit = beta bit, beta bid\n" +
+        "Lines starting with # are ignored. Changes are picked up as soon as the file is saved.";
+
+    void SetUpDictionaryFiles(DictionaryFiles files)
+    {
+        void Show()
+        {
+            DictionaryFileList.Clear();
+            foreach (var file in files.Files) DictionaryFileList.Add(file);
+            Raise(nameof(FileWordCount));
+        }
+        files.Changed += Show;
+        Show();
+
+        AddDictionaryFile = new RelayCommand(_ =>
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Add dictionary files", Filter = "Text files (*.txt)|*.txt", Multiselect = true,
+                InitialDirectory = AppPaths.Settings,
+            };
+            if (dialog.ShowDialog() != true) return;
+            foreach (var path in dialog.FileNames) files.Add(path);
+        });
+        NewDictionaryFile = new RelayCommand(_ =>
+        {
+            var dialog = new SaveFileDialog
+            {
+                Title = "New dictionary file", Filter = "Text files (*.txt)|*.txt", FileName = "Dictionary.txt",
+                InitialDirectory = AppPaths.Settings,
+            };
+            if (dialog.ShowDialog() != true) return;
+            if (!File.Exists(dialog.FileName)) DictionaryFiles.Write(dialog.FileName, [], FileHeader);
+            files.Add(dialog.FileName);
+            OpenFile(dialog.FileName);
+        });
+        RemoveDictionaryFile = new RelayCommand(p => { if (p is DictionaryFile file) files.Remove(file); });
+        OpenDictionaryFile = new RelayCommand(p => { if (p is DictionaryFile file) OpenFile(file.FullPath); });
+        SaveWordsAsFile = new RelayCommand(_ =>
+        {
+            var dialog = new SaveFileDialog
+            {
+                Title = "Save your words as a dictionary file", Filter = "Text files (*.txt)|*.txt", FileName = "My words.txt",
+                InitialDirectory = AppPaths.Settings,
+            };
+            if (dialog.ShowDialog() == true)
+                DictionaryFiles.Write(dialog.FileName, _settings.Dictionary, FileHeader);
+        });
+    }
+
+    /// <summary>How many words the dictionary files add, for the page's caption.</summary>
+    public int FileWordCount => _settings.FileWords.Count;
+
+    static void OpenFile(string path)
+    {
+        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
+        catch (Exception e) { Log.Error($"Could not open {path}", e); }
+    }
+
+    // ---- Settings folder ------------------------------------------------------------------------
+
+    /// <summary>Where settings, voices and stats are kept (see <see cref="AppPaths.Settings"/>).</summary>
+    public string SettingsFolder => AppPaths.Settings;
+    public bool SettingsAreLocal => AppPaths.Settings.TrimEnd('\\').Equals(AppPaths.Data.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+    public RelayCommand ChooseSettingsFolder { get; private set; } = null!;
+    public RelayCommand OpenSettingsFolder { get; private set; } = null!;
+    public RelayCommand UseLocalSettings { get; private set; } = null!;
+
+    void SetUpSettingsFolder()
+    {
+        ChooseSettingsFolder = new RelayCommand(_ =>
+        {
+            var dialog = new OpenFolderDialog
+            {
+                Title = "Folder for your Zeppie Says settings (for example in OneDrive)",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            };
+            if (dialog.ShowDialog() == true) MoveSettingsTo(dialog.FolderName);
+        });
+        OpenSettingsFolder = new RelayCommand(_ => OpenFile(AppPaths.Settings));
+        UseLocalSettings = new RelayCommand(_ => MoveSettingsTo(AppPaths.Data));
+    }
+
+    /// <summary>
+    /// Points Zeppie Says at another settings folder and restarts. If that folder already holds Zeppie Says settings
+    /// (a reinstall, or another PC), the user picks: use those, or replace them with this PC's.
+    /// </summary>
+    void MoveSettingsTo(string folder)
+    {
+        var from = Path.GetFullPath(AppPaths.Settings).TrimEnd('\\');
+        var to = Path.GetFullPath(folder).TrimEnd('\\');
+        if (from.Equals(to, StringComparison.OrdinalIgnoreCase)) return;
+
+        var theirs = Path.Combine(to, "settings.json");
+        var copyOurs = true;
+        if (File.Exists(theirs))
+        {
+            var answer = System.Windows.MessageBox.Show(
+                $"This folder already has Zeppie Says settings, last saved {File.GetLastWriteTime(theirs):d MMM yyyy, HH:mm}.\n\n" +
+                "Yes: use those settings (your dictionary, styles, keys and voices from there).\n" +
+                "No: replace them with the settings from this PC.\n\n" +
+                "Zeppie Says restarts either way. API keys stay on this PC.",
+                "Zeppie Says settings", System.Windows.MessageBoxButton.YesNoCancel, System.Windows.MessageBoxImage.Question);
+            if (answer == System.Windows.MessageBoxResult.Cancel) return;
+            copyOurs = answer == System.Windows.MessageBoxResult.No;
+        }
+
+        try
+        {
+            if (copyOurs)
+            {
+                Save(); // make sure the files in the current folder are up to date
+                Directory.CreateDirectory(to);
+                foreach (var name in AppPaths.SettingsFiles)
+                    if (File.Exists(Path.Combine(from, name)))
+                        File.Copy(Path.Combine(from, name), Path.Combine(to, name), overwrite: true);
+                // Dictionary files kept inside the settings folder belong to it: they move along.
+                foreach (var stored in _settings.DictionaryFiles.Where(p => !Path.IsPathRooted(p)))
+                {
+                    var source = Path.Combine(from, stored);
+                    var target = Path.Combine(to, stored);
+                    if (!File.Exists(source) || File.Exists(target)) continue;
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.Copy(source, target);
+                }
+            }
+            AppPaths.SetSettingsFolder(to);
+            Log.Info($"Settings folder is now {to} ({(copyOurs ? "copied from this PC" : "using what was there")})");
+        }
+        catch (Exception e)
+        {
+            Log.Error($"Could not move the settings to {to}", e);
+            System.Windows.MessageBox.Show($"Could not use that folder: {e.Message}", "Zeppie Says",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+        ((App)System.Windows.Application.Current).Restart();
+    }
 }
 
 public sealed class BindingViewModel : ObservableObject

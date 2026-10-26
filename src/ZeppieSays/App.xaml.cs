@@ -10,8 +10,12 @@ namespace ZeppieSays;
 
 public partial class App : Application
 {
+    const string RestartArgument = "--restarted";
+
     Mutex? _singleInstance;
+    bool _ownsSingleInstance;
     AppSettings _settings = null!;
+    DictionaryFiles? _dictionaryFiles;
     KeyboardHook? _hook;
     AudioRecorder? _recorder;
     EngineCache? _engines;
@@ -28,8 +32,17 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        _singleInstance = new Mutex(true, "ZeppieSays.SingleInstance", out var first);
-        if (!first)
+        // After a restart (a new settings folder) the old instance may still be closing: give it a moment.
+        _singleInstance = new Mutex(false, "ZeppieSays.SingleInstance");
+        try
+        {
+            _ownsSingleInstance = _singleInstance.WaitOne(e.Args.Contains(RestartArgument) ? TimeSpan.FromSeconds(20) : TimeSpan.Zero);
+        }
+        catch (AbandonedMutexException)
+        {
+            _ownsSingleInstance = true; // the previous instance ended without letting go; it's ours now
+        }
+        if (!_ownsSingleInstance)
         {
             MessageBox.Show("ZeppieSays is already running. Find it in the system tray.", "ZeppieSays");
             Shutdown();
@@ -44,6 +57,8 @@ public partial class App : Application
         Log.Info("ZeppieSays starting");
 
         _settings = SettingsStore.Load();
+        Log.Info($"Settings from {AppPaths.Settings}");
+        _dictionaryFiles = new DictionaryFiles(_settings, Dispatcher);
         _models = new ModelManager(_settings);
         _engines = new EngineCache(_models, _settings);
         _recorder = new AudioRecorder();
@@ -60,7 +75,8 @@ public partial class App : Application
             () => controller.State != DictationState.Idle, Dispatcher);
         _meetings = new MeetingController(_settings, Dispatcher);
 
-        var model = new MainViewModel(_settings, _models, _engines, _hook, rewriter, usage, _notetaker, summarizer, voices, _meetings);
+        var model = new MainViewModel(_settings, _models, _engines, _hook, rewriter, usage, _notetaker, summarizer, voices, _meetings,
+            _dictionaryFiles);
         model.Notetaker.Start();
         _window = new MainWindow(model);
         _overlay = new OverlayWindow();
@@ -120,6 +136,13 @@ public partial class App : Application
         Shutdown();
     }
 
+    /// <summary>Starts a fresh instance (which waits for this one to close) and quits, e.g. to load another settings folder.</summary>
+    public void Restart()
+    {
+        System.Diagnostics.Process.Start(Environment.ProcessPath!, RestartArgument);
+        Quit();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         if (_tray is not null) _tray.Visible = false;
@@ -130,6 +153,8 @@ public partial class App : Application
         _hook?.Dispose();
         _recorder?.Dispose();
         _engines?.Dispose();
+        _dictionaryFiles?.Dispose();
+        if (_ownsSingleInstance) _singleInstance?.ReleaseMutex();
         _singleInstance?.Dispose();
         Log.Info("ZeppieSays stopped");
         base.OnExit(e);

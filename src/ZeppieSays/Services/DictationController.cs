@@ -226,7 +226,7 @@ public sealed class DictationController : IDisposable
     static string LanguageName(string code) => ModelCatalog.Languages.FirstOrDefault(l => l.Code == code).Name ?? code;
 
     string PromptFor(ITranscriptionEngine engine, KeyBinding binding, ScreenContext context) =>
-        engine is WhisperEngine ? TextShaping.BuildPrompt(_settings.Dictionary, context) : "";
+        engine is WhisperEngine ? TextShaping.BuildPrompt(_settings.AllWords, context) : "";
 
     /// <summary>Whisper drops clips shorter than a second, so short ones get trailing silence.</summary>
     static float[] Pad(float[] samples)

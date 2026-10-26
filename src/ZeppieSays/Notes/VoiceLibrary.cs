@@ -27,7 +27,7 @@ public sealed class VoiceLibrary
     const int MaxSeconds = 60; // enough speech for a stable voiceprint
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
-    static string FilePath => Path.Combine(AppPaths.Data, "voices.json");
+    static string FilePath => Path.Combine(AppPaths.Settings, "voices.json");
 
     readonly object _lock = new();
     List<KnownVoice> _voices = [];
@@ -35,16 +35,22 @@ public sealed class VoiceLibrary
     public static VoiceLibrary Load()
     {
         var library = new VoiceLibrary();
+        library.ReloadFromDisk();
+        return library;
+    }
+
+    /// <summary>Picks up voices another PC added to the same file (a settings folder in OneDrive).</summary>
+    void ReloadFromDisk()
+    {
         try
         {
             if (File.Exists(FilePath))
-                library._voices = JsonSerializer.Deserialize<List<KnownVoice>>(File.ReadAllText(FilePath)) ?? [];
+                _voices = JsonSerializer.Deserialize<List<KnownVoice>>(File.ReadAllText(FilePath)) ?? [];
         }
         catch (Exception e)
         {
             Log.Error("Could not read the voice library", e);
         }
-        return library;
     }
 
     public IReadOnlyList<string> Names
@@ -79,7 +85,11 @@ public sealed class VoiceLibrary
     public Dictionary<int, string> Recognize(IReadOnlyDictionary<int, float[]> speakers)
     {
         List<KnownVoice> voices;
-        lock (_lock) voices = [.. _voices];
+        lock (_lock)
+        {
+            ReloadFromDisk(); // someone named on another PC is recognised here too
+            voices = [.. _voices];
+        }
         var candidates = (from s in speakers
                           from v in voices
                           let score = Similarity(s.Value, v.Voiceprint)
@@ -101,6 +111,7 @@ public sealed class VoiceLibrary
     {
         lock (_lock)
         {
+            ReloadFromDisk();
             var voice = _voices.FirstOrDefault(v => v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (voice is null)
                 _voices.Add(new KnownVoice { Name = name, Voiceprint = Normalize(voiceprint), Samples = 1 });
@@ -119,6 +130,7 @@ public sealed class VoiceLibrary
     {
         lock (_lock)
         {
+            ReloadFromDisk();
             _voices.RemoveAll(v => v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             Save();
         }

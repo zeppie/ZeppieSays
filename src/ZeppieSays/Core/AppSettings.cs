@@ -26,6 +26,29 @@ public sealed class DictionaryEntry
     public string Term { get; set; } = "";
     /// <summary>Alternative spellings the model tends to produce, replaced by <see cref="Term"/>.</summary>
     public List<string> SoundsLike { get; set; } = [];
+
+    /// <summary>The dictionary file the word comes from; null for the user's own words in settings.json.</summary>
+    [JsonIgnore] public string? Source { get; set; }
+
+    /// <summary>"Betabit" or "Betabit = beta bit, beta bid"; null for an empty line or a "# comment".</summary>
+    public static DictionaryEntry? Parse(string line)
+    {
+        line = line.Trim();
+        if (line.Length == 0 || line.StartsWith('#')) return null;
+        var parts = line.Split('=', 2);
+        var term = parts[0].Trim();
+        if (term.Length == 0) return null;
+        return new DictionaryEntry
+        {
+            Term = term,
+            SoundsLike = parts.Length > 1
+                ? parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+                : [],
+        };
+    }
+
+    /// <summary>The line <see cref="Parse"/> reads back.</summary>
+    public override string ToString() => SoundsLike.Count > 0 ? $"{Term} = {string.Join(", ", SoundsLike)}" : Term;
 }
 
 public sealed class AppSettings
@@ -45,7 +68,17 @@ public sealed class AppSettings
     public bool StartWithWindows { get; set; }
     /// <summary>NAudio WaveIn device number; -1 is the Windows default microphone.</summary>
     public int MicrophoneDevice { get; set; } = -1;
+    /// <summary>The user's own words, edited on the Dictionary page.</summary>
     public List<DictionaryEntry> Dictionary { get; set; } = [];
+    /// <summary>
+    /// Text files with more words (one per line). A file inside the settings folder is stored relative to it,
+    /// so the same settings work on another PC where that folder is somewhere else.
+    /// </summary>
+    public List<string> DictionaryFiles { get; set; } = [];
+    /// <summary>The words read from <see cref="DictionaryFiles"/>; filled at runtime, never saved.</summary>
+    [JsonIgnore] public List<DictionaryEntry> FileWords { get; set; } = [];
+    /// <summary>Everything the transcription and cleanup should know: own words first, then the files.</summary>
+    [JsonIgnore] public IEnumerable<DictionaryEntry> AllWords => Dictionary.Concat(FileWords);
     public List<Style> Styles { get; set; } = StyleDefaults.Styles();
     /// <summary>Checked top to bottom; the first match decides the style. Website (title) rules win over app rules.</summary>
     public List<StyleRule> StyleRules { get; set; } = StyleDefaults.Rules();
@@ -93,23 +126,61 @@ public static class SettingsStore
         Converters = { new JsonStringEnumConverter() },
     };
 
-    static string FilePath => System.IO.Path.Combine(AppPaths.Data, "settings.json");
+    static string FilePath => System.IO.Path.Combine(AppPaths.Settings, "settings.json");
+
+    /// <summary>API keys, on this PC only (they're encrypted for this Windows user and useless elsewhere).</summary>
+    static string KeysPath => System.IO.Path.Combine(AppPaths.Data, "keys.json");
 
     public static AppSettings Load()
     {
+        var settings = new AppSettings();
         try
         {
             if (File.Exists(FilePath))
-                return Parse(File.ReadAllText(FilePath));
+                settings = Parse(File.ReadAllText(FilePath));
         }
         catch (Exception e)
         {
             Log.Error("Could not read settings, using defaults", e);
         }
-        return new AppSettings();
+
+        var legacyKeys = settings.Llm.OpenAiKeyProtected.Length > 0 || settings.Llm.AnthropicKeyProtected.Length > 0;
+        if (File.Exists(KeysPath)) LoadKeys(settings.Llm);
+        // Keys found in settings.json (where older versions kept them) move to keys.json and out of settings.json.
+        if (legacyKeys && !File.Exists(KeysPath)) Save(settings);
+        return settings;
     }
 
-    public static AppSettings Parse(string json) => Migrate(JsonSerializer.Deserialize<AppSettings>(json, Json) ?? new());
+    public static AppSettings Parse(string json)
+    {
+        var settings = Migrate(JsonSerializer.Deserialize<AppSettings>(json, Json) ?? new());
+        // Older versions kept the API keys in settings.json; pick them up so Load can move them.
+        var llm = System.Text.Json.Nodes.JsonNode.Parse(json)?["Llm"];
+        settings.Llm.OpenAiKeyProtected = llm?["OpenAiKeyProtected"]?.GetValue<string>() ?? "";
+        settings.Llm.AnthropicKeyProtected = llm?["AnthropicKeyProtected"]?.GetValue<string>() ?? "";
+        return settings;
+    }
+
+    static void LoadKeys(LlmSettings llm)
+    {
+        try
+        {
+            var keys = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(KeysPath)) ?? [];
+            llm.OpenAiKeyProtected = keys.GetValueOrDefault("OpenAI", "");
+            llm.AnthropicKeyProtected = keys.GetValueOrDefault("Anthropic", "");
+        }
+        catch (Exception e)
+        {
+            Log.Error("Could not read the API keys", e);
+        }
+    }
+
+    static void SaveKeys(LlmSettings llm) =>
+        File.WriteAllText(KeysPath, JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["OpenAI"] = llm.OpenAiKeyProtected,
+            ["Anthropic"] = llm.AnthropicKeyProtected,
+        }));
 
     public static string Serialize(AppSettings settings) => JsonSerializer.Serialize(settings, Json);
 
@@ -129,8 +200,9 @@ public static class SettingsStore
     {
         try
         {
+            SaveKeys(settings.Llm);
             var tmp = FilePath + ".tmp";
-            File.WriteAllText(tmp, Serialize(settings));
+            File.WriteAllText(tmp, Serialize(settings)); // without the keys: they're [JsonIgnore]
             File.Move(tmp, FilePath, overwrite: true);
         }
         catch (Exception e)

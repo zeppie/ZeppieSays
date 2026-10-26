@@ -48,8 +48,12 @@ public sealed class StyleRule
 public sealed class LlmSettings
 {
     public string OllamaUrl { get; set; } = "http://127.0.0.1:11434";
-    public string OpenAiKeyProtected { get; set; } = "";
-    public string AnthropicKeyProtected { get; set; } = "";
+    /// <summary>
+    /// Encrypted for this Windows user on this PC, so they can't be used anywhere else anyway. Kept in keys.json
+    /// on this PC (see SettingsStore), never in settings.json, which may live in a synced folder.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore] public string OpenAiKeyProtected { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore] public string AnthropicKeyProtected { get; set; } = "";
     /// <summary>After this long the plain transcript is pasted instead of waiting for the LLM.</summary>
     public double TimeoutSeconds { get; set; } = 6;
 

@@ -4,11 +4,48 @@ namespace ZeppieSays.Core;
 
 public static class AppPaths
 {
+    /// <summary>This PC only: models, logs, recordings in progress, API keys and the pointer to <see cref="Settings"/>.</summary>
     public static string Data { get; } = Ensure(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ZeppieSays"));
 
     public static string Models { get; } = Ensure(Path.Combine(Data, "models"));
     public static string Logs { get; } = Ensure(Path.Combine(Data, "logs"));
+
+    /// <summary>
+    /// Where the user's own data lives (settings, voices, stats): the local data folder unless the user picked
+    /// another one, such as a OneDrive folder, so it survives a reinstall and can follow them to another PC.
+    /// </summary>
+    public static string Settings { get; } = ReadSettingsFolder();
+
+    /// <summary>The files that belong in <see cref="Settings"/>; a new kind of user data is added here.</summary>
+    public static readonly string[] SettingsFiles = ["settings.json", "voices.json", "usage.json"];
+
+    static string PointerPath => Path.Combine(Data, "location.json");
+
+    static string ReadSettingsFolder()
+    {
+        try
+        {
+            if (File.Exists(PointerPath) &&
+                System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(PointerPath)) is { } pointer &&
+                pointer.TryGetValue("SettingsFolder", out var folder) && !string.IsNullOrWhiteSpace(folder))
+                return Ensure(folder);
+        }
+        catch
+        {
+            // An unreachable folder (a OneDrive that isn't there yet) must not stop the app: fall back to local.
+        }
+        return Data;
+    }
+
+    /// <summary>Remembers the settings folder for the next start; null goes back to the local data folder.</summary>
+    public static void SetSettingsFolder(string? folder)
+    {
+        if (folder is null || Path.GetFullPath(folder).TrimEnd('\\').Equals(Data.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            File.Delete(PointerPath);
+        else
+            File.WriteAllText(PointerPath, System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { ["SettingsFolder"] = folder }));
+    }
 
     static string Ensure(string dir)
     {

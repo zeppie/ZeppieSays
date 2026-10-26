@@ -49,7 +49,7 @@ public static partial class TextShaping
             text = SpaceBeforePunctuation().Replace(text, "$1").TrimStart(',', ' ');
         }
 
-        foreach (var entry in settings.Dictionary)
+        foreach (var entry in settings.AllWords)
             text = ApplyEntry(text, entry, counts);
 
         if (context.IsCodeEditor)
@@ -131,7 +131,7 @@ public static partial class TextShaping
         // Continuing a sentence: drop the capital the model put on the first word, unless it is a name we know.
         var firstWord = FirstWord().Match(text).Value;
         var keep = firstWord == "I" || firstWord.Skip(1).Any(char.IsUpper) ||
-                   settings.Dictionary.Any(d => d.Term.Equals(firstWord, StringComparison.Ordinal));
+                   settings.AllWords.Any(d => d.Term.Equals(firstWord, StringComparison.Ordinal));
         return keep ? text : char.ToLower(text[0]) + text[1..];
     }
 

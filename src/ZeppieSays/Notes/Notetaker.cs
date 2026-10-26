@@ -302,7 +302,7 @@ public sealed class Notetaker : IDisposable
     {
         var engine = await _engines.GetAsync(model.Info.Id);
         var prompt = Options.UseDictionary && model.Info.SupportsPrompt
-            ? TextShaping.BuildPrompt(_settings.Dictionary, ScreenContext.Empty)
+            ? TextShaping.BuildPrompt(_settings.AllWords, ScreenContext.Empty)
             : "";
         var language = model.Info.AutoLanguageOnly ? "auto" : Options.Language;
         var pieces = turns.Select(t => (Turn: t, Pieces: AudioFile.Split(t.Track, t.Start, t.End))).ToList();

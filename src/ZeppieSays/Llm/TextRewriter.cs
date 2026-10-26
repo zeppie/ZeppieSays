@@ -98,7 +98,7 @@ public sealed partial class TextRewriter(AppSettings settings)
         timeout.CancelAfter(TimeSpan.FromSeconds(seconds));
         try
         {
-            var output = await model.CompleteAsync(BuildSystemPrompt(style, context, settings.Dictionary, code, target),
+            var output = await model.CompleteAsync(BuildSystemPrompt(style, context, settings.AllWords, code, target),
                 BuildUserMessage(text), timeout.Token);
             if (Accept(text, output, style) is not { } accepted)
                 return new(text, false, target is null ? "the reply didn't look like a rewrite" : "the reply didn't look like a translation");

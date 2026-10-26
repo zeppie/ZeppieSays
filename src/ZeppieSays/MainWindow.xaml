@@ -4,6 +4,7 @@
         xmlns:ui="clr-namespace:ZeppieSays.UI"
         xmlns:core="clr-namespace:ZeppieSays.Core"
         xmlns:notes="clr-namespace:ZeppieSays.Notes"
+        xmlns:services="clr-namespace:ZeppieSays.Services"
         Title="ZeppieSays" Width="1180" Height="800" MinWidth="860" MinHeight="560"
         WindowStartupLocation="CenterScreen" Icon="Assets/zeppie.ico"
         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
@@ -82,19 +83,26 @@
                                         <RowDefinition Height="*" />
                                     </Grid.RowDefinitions>
                                     <Grid Margin="0,0,0,16">
+                                        <!-- The title always fits; the key status takes what's left and is cut off with "…". -->
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding SelectedItem.(ui:Nav.Title), RelativeSource={RelativeSource TemplatedParent}}"
                                                    FontSize="30" FontWeight="SemiBold" FontFamily="Segoe UI Variable Display, Segoe UI" />
                                         <Border Grid.Column="1" x:Name="StatusPill" CornerRadius="14" Padding="14,6" VerticalAlignment="Center"
+                                                HorizontalAlignment="Right" Margin="24,0,0,0" ToolTip="{Binding Status}"
                                                 Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                            <StackPanel Orientation="Horizontal">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
                                                 <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" VerticalAlignment="Center" />
-                                                <TextBlock Text="{Binding Status}" FontSize="13" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="13" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                            </StackPanel>
+                                            </Grid>
                                         </Border>
                                     </Grid>
                                     <ContentPresenter Grid.Row="1" x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" />
@@ -667,12 +675,72 @@
 
             <!-- Dictionary -->
             <TabItem Header="Dictionary" Tag="&#xE82D;">
-                <Grid Margin="0,12,0,0">
+                <Grid Margin="0,12,18,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="340" />
+                    </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
+
+                    <!-- Dictionary files: shared or synced word lists -->
+                    <Border Grid.Column="2" Grid.RowSpan="3" Style="{StaticResource Card}" VerticalAlignment="Top" Margin="0">
+                        <StackPanel>
+                            <TextBlock Text="Dictionary files" Style="{StaticResource SectionTitle}" />
+                            <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,10"
+                                       Text="Text files with one word per line, for example a team list in a shared folder. Changes are picked up as soon as a file is saved." />
+                            <ItemsControl ItemsSource="{Binding DictionaryFileList}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type services:DictionaryFile}">
+                                        <Grid Margin="0,0,0,8" ToolTip="{Binding FullPath}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                                                       Foreground="{StaticResource Accent}" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" Margin="10,0,6,0">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource Caption}">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}{0} words{1}">
+                                                            <Binding Path="Words" />
+                                                            <Binding Path="Problem" StringFormat=" · {0}" TargetNullValue="" />
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Content="&#xE70F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                    Padding="8,4" Background="Transparent" BorderThickness="0" ToolTip="Open to edit"
+                                                    AutomationProperties.Name="{Binding Name, StringFormat='Open {0}'}"
+                                                    Command="{Binding DataContext.OpenDictionaryFile, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Grid.Column="3" Content="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                    Padding="8,4" Background="Transparent" BorderThickness="0"
+                                                    ToolTip="Stop using this file (the file itself stays)"
+                                                    AutomationProperties.Name="{Binding Name, StringFormat='Remove {0}'}"
+                                                    Command="{Binding DataContext.RemoveDictionaryFile, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <WrapPanel Margin="0,4,0,0">
+                                <Button Content="Add file…" Command="{Binding AddDictionaryFile}" Margin="0,0,8,8" />
+                                <Button Content="New file…" Command="{Binding NewDictionaryFile}" Margin="0,0,8,8" />
+                            </WrapPanel>
+                            <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,0">
+                                <Hyperlink Command="{Binding SaveWordsAsFile}">Save your own words as a file…</Hyperlink>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
                     <TextBox x:Name="WordBox" Text="{Binding NewWord, UpdateSourceTrigger=PropertyChanged}" KeyDown="WordBox_KeyDown" />
                     <TextBlock Grid.Row="1" Style="{StaticResource Caption}" Margin="4,6,4,10"
                                Text="Type a word and press Enter. To fix a word that keeps coming out wrong, write it as  Betabit = beta bit, beta bid" />
@@ -919,6 +987,39 @@
                                           SelectedValue="{Binding Microphone}" />
                                 <CheckBox IsChecked="{Binding UseGpu}" Content="Use the graphics card for Whisper" Margin="0,14,0,0" />
                                 <CheckBox IsChecked="{Binding StartWithWindows}" Content="Start with Windows" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <!-- Where the user's own data lives -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Settings folder" Style="{StaticResource SectionTitle}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="10,7">
+                                        <TextBlock Text="{Binding SettingsFolder, Mode=OneWay}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding SettingsFolder, Mode=OneWay}" />
+                                    </Border>
+                                    <Button Grid.Column="1" Content="Change…" Command="{Binding ChooseSettingsFolder}" Margin="8,0,0,0" />
+                                    <Button Grid.Column="2" Content="Open" Command="{Binding OpenSettingsFolder}" Margin="6,0,0,0" />
+                                </Grid>
+                                <TextBlock Style="{StaticResource Caption}" Margin="2,8,0,0"
+                                           Text="Your settings, dictionary, styles, dictation keys, named voices and stats. Put this in OneDrive to keep them after a reinstall and on your other PCs. API keys always stay on this PC. When two PCs change settings at the same moment, the last save wins." />
+                                <TextBlock Margin="2,6,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SettingsAreLocal}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Hyperlink Command="{Binding UseLocalSettings}">Keep settings on this PC only</Hyperlink>
+                                </TextBlock>
                             </StackPanel>
                         </Border>
                         <TextBlock Margin="4,0,4,12" Style="{StaticResource Caption}">
