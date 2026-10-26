@@ -114,7 +114,7 @@
                                   ToolTip="Who says this: pick a speaker, or type a new name" />
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <TextBlock Text="Starts at" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <TextBox Text="{Binding EditTime, UpdateSourceTrigger=PropertyChanged}" Width="72" FontFamily="Consolas"
+                            <TextBox Text="{Binding EditTime, UpdateSourceTrigger=PropertyChanged}" Width="120" MinHeight="36" FontSize="15" FontFamily="Consolas"
                                      HorizontalContentAlignment="Center" PreviewKeyDown="EditBox_KeyDown"
                                      ToolTip="When this paragraph starts, like 1:05. It stays between the paragraph before and the one after." />
                             <Button Content="&#xE916;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="8,5" Margin="4,0,0,0"
