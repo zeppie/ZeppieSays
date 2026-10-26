@@ -113,38 +113,13 @@
                                         <RowDefinition Height="*" />
                                     </Grid.RowDefinitions>
                                     <Grid Margin="0,0,0,16">
-                                        <!-- The title always fits; the key status takes what's left and is cut off with "…". -->
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding SelectedItem.(ui:Nav.Title), RelativeSource={RelativeSource TemplatedParent}}"
                                                    FontSize="30" FontWeight="SemiBold" FontFamily="Segoe UI Variable Display, Segoe UI" />
-                                        <Border Grid.Column="1" x:Name="StatusPill" CornerRadius="14" Padding="14,6" VerticalAlignment="Center"
-                                                HorizontalAlignment="Right" Margin="24,0,0,0" ToolTip="{Binding Status}"
-                                                Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" VerticalAlignment="Center" />
-                                                <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="13" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                            </Grid>
-                                        </Border>
                                     </Grid>
                                     <ContentPresenter Grid.Row="1" x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" />
                                 </Grid>
                             </Border>
                         </Grid>
-                        <ControlTemplate.Triggers>
-                            <!-- The home page shows the keys in its hero already. -->
-                            <Trigger Property="SelectedIndex" Value="0">
-                                <Setter TargetName="StatusPill" Property="Visibility" Value="Collapsed" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -397,92 +372,8 @@
             <TabItem Header="Notetaker" Tag="&#xE7C8;" x:Name="NotetakerTab">
                 <Grid DataContext="{Binding Notetaker}" AllowDrop="True" Drop="Notetaker_Drop" DragOver="Notetaker_DragOver"
                       Background="Transparent" Margin="0,4,18,16">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-
-                    <!-- How files are transcribed -->
-                    <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="28" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="Folder" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="10,7">
-                                        <TextBlock Text="{Binding Folder}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Folder}" />
-                                    </Border>
-                                    <Button Grid.Column="1" Content="Change…" Command="{Binding ChooseFolder}" Margin="8,0,0,0" />
-                                    <Button Grid.Column="2" Content="Open" Command="{Binding OpenFolder}" Margin="6,0,0,0" />
-                                </Grid>
-                                <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
-                                           Text="Every audio or video file in this folder is transcribed. The transcript (.md) and the audio then move to Done." />
-
-                                <!-- Meetings -->
-                                <Grid Margin="0,14,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <CheckBox Content="Ask when a meeting starts" IsChecked="{Binding AskToRecordMeetings}"
-                                              VerticalAlignment="Center"
-                                              ToolTip="When Teams, Zoom, Webex, Slack or Discord starts using your microphone" />
-                                    <Button Grid.Column="1" Command="{Binding ToggleRecording}" MinWidth="128" Margin="8,0,0,0"
-                                            Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="{Binding RecordLabel}">
-                                        <StackPanel Orientation="Horizontal">
-                                            <Ellipse Width="9" Height="9" Fill="#FF6B6F" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                            <TextBlock Text="{Binding RecordLabel}" />
-                                        </StackPanel>
-                                    </Button>
-                                </Grid>
-                                <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
-                                           Text="Records your microphone and the call separately, so you are always labelled right. Headphones keep the call out of your microphone." />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="130" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="Model" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                                        <ComboBox ItemsSource="{Binding DataContext.InstalledModels, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding ModelId}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                        <TextBlock Text="Language" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                                        <ComboBox ItemsSource="{Binding DataContext.Languages, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Language}"
-                                                  ToolTip="Whisper only; Parakeet detects the language itself" />
-                                    </StackPanel>
-                                </Grid>
-                                <WrapPanel Margin="0,12,0,0">
-                                    <CheckBox Content="Label speakers" IsChecked="{Binding LabelSpeakers}" Margin="0,0,8,4"
-                                              ToolTip="Speaker 1, Speaker 2 per paragraph. Downloads two small models (33 MB) the first time." />
-                                    <ComboBox ItemsSource="{x:Static ui:NotetakerViewModel.SpeakerCounts}" DisplayMemberPath="Label"
-                                              SelectedValuePath="Value" SelectedValue="{Binding Speakers}" MinWidth="104" Margin="0,0,20,4"
-                                              IsEnabled="{Binding LabelSpeakers}" VerticalAlignment="Center"
-                                              ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
-                                    <CheckBox Content="Summary and action items" IsChecked="{Binding Summarize}" Margin="0,0,20,4"
-                                              ToolTip="Written by your default style model (Styles page)" />
-                                    <CheckBox Content="Dictionary hints" IsChecked="{Binding UseDictionary}" Margin="0,0,0,4"
-                                              ToolTip="Gives your dictionary words to Whisper so names are spelled right" />
-                                </WrapPanel>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
                     <!-- Transcripts, and the selected one -->
-                    <Grid Grid.Row="1">
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="340" />
                             <ColumnDefinition Width="16" />
@@ -494,6 +385,14 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
+                            <StackPanel>
+                            <Button Command="{Binding ToggleRecording}" HorizontalAlignment="Stretch" Margin="0,0,0,10" Padding="0,8"
+                                    Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="{Binding RecordLabel}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="9" Height="9" Fill="#FF6B6F" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Text="{Binding RecordLabel}" />
+                                </StackPanel>
+                            </Button>
                             <!-- Drop zone -->
                             <Border CornerRadius="12" Padding="14,12" Margin="0,0,0,10" BorderThickness="1.5"
                                     BorderBrush="{StaticResource Accent}" Background="{StaticResource AccentSoft}">
@@ -508,6 +407,7 @@
                                                Text="Drop audio or video files here, or save them in the folder." />
                                 </Grid>
                             </Border>
+                            </StackPanel>
                             <ListBox Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding Selected}"
                                      BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -1098,6 +998,75 @@
                                           SelectedValue="{Binding Microphone}" />
                                 <CheckBox IsChecked="{Binding UseGpu}" Content="Use the graphics card for Whisper" Margin="0,14,0,0" />
                                 <CheckBox IsChecked="{Binding StartWithWindows}" Content="Start with Windows" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <!-- Notetaker settings -->
+                        <Border Style="{StaticResource Card}" DataContext="{Binding Notetaker}">
+                            <StackPanel>
+                                <TextBlock Text="Notetaker settings" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,14"
+                                           Text="These apply to the Notetaker page: transcribing audio and video files, and recording meetings. Dictation has its own model and language on the Dictation page." />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Folder" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="6" Padding="10,7">
+                                            <TextBlock Text="{Binding Folder}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Folder}" />
+                                        </Border>
+                                        <Button Grid.Column="1" Content="Change…" Command="{Binding ChooseFolder}" Margin="8,0,0,0" />
+                                        <Button Grid.Column="2" Content="Open" Command="{Binding OpenFolder}" Margin="6,0,0,0" />
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
+                                               Text="Every audio or video file in this folder is transcribed. The transcript (.md) and the audio then move to Done." />
+
+                                    <!-- Meetings -->
+                                    <CheckBox Content="Ask when a meeting starts" IsChecked="{Binding AskToRecordMeetings}" Margin="0,14,0,0"
+                                              ToolTip="When Teams, Zoom, Webex, Slack or Discord starts using your microphone" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="28,2,0,0"
+                                               Text="Then records your microphone and the call separately, so you are always labelled right. Headphones keep the call out of your microphone. You can also record from the Notetaker page." />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="130" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Model" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                            <ComboBox ItemsSource="{Binding DataContext.InstalledModels, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding ModelId}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                            <TextBlock Text="Language" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                            <ComboBox ItemsSource="{Binding DataContext.Languages, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Language}"
+                                                      ToolTip="Whisper only; Parakeet detects the language itself" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <WrapPanel Margin="0,12,0,0">
+                                        <CheckBox Content="Label speakers" IsChecked="{Binding LabelSpeakers}" Margin="0,0,8,4"
+                                                  ToolTip="Speaker 1, Speaker 2 per paragraph. Downloads two small models (33 MB) the first time." />
+                                        <ComboBox ItemsSource="{x:Static ui:NotetakerViewModel.SpeakerCounts}" DisplayMemberPath="Label"
+                                                  SelectedValuePath="Value" SelectedValue="{Binding Speakers}" MinWidth="104" Margin="0,0,20,4"
+                                                  IsEnabled="{Binding LabelSpeakers}" VerticalAlignment="Center"
+                                                  ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
+                                        <CheckBox Content="Summary and action items" IsChecked="{Binding Summarize}" Margin="0,0,20,4"
+                                                  ToolTip="Written by your default style model (Styles page)" />
+                                        <CheckBox Content="Dictionary hints" IsChecked="{Binding UseDictionary}" Margin="0,0,0,4"
+                                                  ToolTip="Gives your dictionary words to Whisper so names are spelled right" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Grid>
                             </StackPanel>
                         </Border>
                         <!-- Where the user's own data lives -->
