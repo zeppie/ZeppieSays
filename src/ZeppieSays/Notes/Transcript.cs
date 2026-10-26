@@ -93,13 +93,15 @@ public sealed class Transcript
         md.AppendLine();
         foreach (var p in Paragraphs)
         {
-            md.Append($"**[{Stamp(p.Seconds)}]");
-            md.Append(p.Speaker is not null ? $" {p.Speaker}:** " : "** ");
-            md.AppendLine(p.Text);
+            md.AppendLine(FormatParagraph(p));
             md.AppendLine();
         }
         return md.ToString();
     }
+
+    /// <summary>"**[01:05] Speaker 1:** text", or "**[01:05]** text" when the speaker is unknown.</summary>
+    public static string FormatParagraph(TranscriptParagraph p) =>
+        $"**[{Stamp(p.Seconds)}]" + (p.Speaker is not null ? $" {p.Speaker}:** " : "** ") + p.Text;
 
     public static string Stamp(double seconds)
     {

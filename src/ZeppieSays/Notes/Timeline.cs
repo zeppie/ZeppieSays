@@ -43,6 +43,29 @@ public sealed class Timeline
         Segments = Segments.Select(s => s.Speaker == from ? s with { Speaker = to } : s).ToList();
 
     /// <summary>
+    /// Gives the stretch from <paramref name="start"/> to <paramref name="end"/> that <paramref name="from"/> was
+    /// talking in to <paramref name="to"/> instead, after the user said another person said it. Other speakers'
+    /// segments, and the parts of <paramref name="from"/>'s segments outside the stretch, stay as they were.
+    /// </summary>
+    public void Reassign(double start, double end, string? from, string to)
+    {
+        if (from is null || from == to) return;
+        var result = new List<SpeakerSegment>();
+        foreach (var segment in Segments)
+        {
+            if (segment.Speaker != from || segment.End <= start || segment.Start >= end)
+            {
+                result.Add(segment);
+                continue;
+            }
+            if (segment.Start < start) result.Add(segment with { End = start });
+            result.Add(new SpeakerSegment(to, Math.Max(segment.Start, start), Math.Min(segment.End, end)));
+            if (segment.End > end) result.Add(segment with { Start = end });
+        }
+        Segments = Merge(result);
+    }
+
+    /// <summary>
     /// The loudest sample in each of <paramref name="count"/> equal slices, over all tracks, scaled so the loudest
     /// slice is 1. A square root lifts quiet speech so it isn't a flat line next to a loud peak.
     /// </summary>

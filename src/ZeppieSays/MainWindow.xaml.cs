@@ -47,6 +47,33 @@ public partial class MainWindow : Window
             }
     }
 
+    // Editing a paragraph: the text box takes the keyboard at once; Enter saves, Esc cancels.
+    void EditBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        var box = (TextBox)sender;
+        box.Focus();
+        box.CaretIndex = box.Text.Length;
+    }
+
+    void EditBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not TranscriptLineViewModel line) return;
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
+            Model.Notetaker.SaveEdit.Execute(line);
+        else if (e.Key == Key.Escape)
+            Model.Notetaker.CancelEdit.Execute(line);
+        else
+            return;
+        e.Handled = true;
+    }
+
+    /// <summary>The cursor of the text box (the button's Tag) says where the paragraph is cut in two.</summary>
+    void SplitAtCursor_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: TextBox box, DataContext: TranscriptLineViewModel line })
+            Model.Notetaker.SplitLine(line, box.CaretIndex);
+    }
+
     /// <summary>Enter in a speaker's name box applies the name, like leaving the box does.</summary>
     void SpeakerName_KeyDown(object sender, KeyEventArgs e)
     {

@@ -70,6 +70,77 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- A paragraph of the transcript as read: click to jump there, the pencil (on hover) to edit it -->
+        <DataTemplate x:Key="LineView" DataType="{x:Type ui:TranscriptLineViewModel}">
+            <Grid x:Name="Root" Background="Transparent">
+                <Button Style="{StaticResource FlatLine}" HorizontalContentAlignment="Stretch"
+                        Command="{Binding DataContext.SeekLine, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                        CommandParameter="{Binding}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Fill="{Binding Brush}" Margin="0,0,6,0" VerticalAlignment="Center"
+                                     Visibility="{Binding HasSpeaker, Converter={StaticResource Visible}}" />
+                            <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="12" Margin="0,0,8,0"
+                                       Visibility="{Binding HasSpeaker, Converter={StaticResource Visible}}" />
+                            <TextBlock Text="{Binding Stamp}" Style="{StaticResource Caption}" FontFamily="Consolas" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,2,28,0" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="Pencil" Content="&#xE70F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Padding="7,5"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,8,0" Opacity="0"
+                        Command="{Binding DataContext.EditLine, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                        CommandParameter="{Binding}" ToolTip="Edit this paragraph" AutomationProperties.Name="Edit this paragraph" />
+            </Grid>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="Root" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Pencil" Property="Opacity" Value="1" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <!-- The same paragraph being edited: its speaker, its text, and what else can be done with it -->
+        <DataTemplate x:Key="LineEdit" DataType="{x:Type ui:TranscriptLineViewModel}">
+            <Border Margin="0,2" Padding="12,10" CornerRadius="10" BorderThickness="1"
+                    Background="{StaticResource AccentSoft}" BorderBrush="{StaticResource Accent}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox IsEditable="True" Width="200" HorizontalAlignment="Left"
+                                  ItemsSource="{Binding DataContext.SpeakerNames, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                  Text="{Binding EditSpeaker, UpdateSourceTrigger=PropertyChanged}"
+                                  ToolTip="Who says this: pick a speaker, or type a new name" />
+                        <TextBlock Grid.Column="1" Text="{Binding Stamp}" Style="{StaticResource Caption}" FontFamily="Consolas"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                    <TextBox x:Name="EditBox" Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap"
+                             MinHeight="64" Loaded="EditBox_Loaded" PreviewKeyDown="EditBox_KeyDown" />
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button Content="Save" Style="{DynamicResource AccentButtonStyle}" Padding="14,5" Margin="0,0,6,6"
+                                Command="{Binding DataContext.SaveEdit, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}" />
+                        <Button Content="Cancel" Padding="12,5" Margin="0,0,6,6"
+                                Command="{Binding DataContext.CancelEdit, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}" />
+                        <Button Content="Split at cursor" Padding="12,5" Margin="0,0,6,6" Click="SplitAtCursor_Click"
+                                Tag="{Binding ElementName=EditBox}"
+                                ToolTip="Cuts the text where the cursor is. The second part opens next, so you can give it to someone else." />
+                        <Button Content="Merge up" Padding="12,5" Margin="0,0,6,6" IsEnabled="{Binding CanMergeUp}"
+                                Command="{Binding DataContext.MergeUp, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}" ToolTip="Join this paragraph to the one before it" />
+                        <Button Content="Merge down" Padding="12,5" Margin="0,0,6,6" IsEnabled="{Binding CanMergeDown}"
+                                Command="{Binding DataContext.MergeDown, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}" ToolTip="Join this paragraph to the one after it" />
+                        <Button Content="Delete" Padding="12,5" Margin="0,0,0,6"
+                                Command="{Binding DataContext.DeleteLine, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}" ToolTip="Remove this paragraph from the transcript" />
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Caption}" Text="Enter saves, Esc cancels." />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
         <DataTemplate x:Key="LoadedRow" DataType="{x:Type ui:LoadedModelRow}">
             <Grid Margin="0,4" Opacity="{Binding Dim}">
                 <Grid.ColumnDefinitions>
@@ -725,9 +796,9 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Orientation="Horizontal">
                                             <RadioButton Content="Transcript" GroupName="NoteTab" IsChecked="{Binding ShowTranscript}" Style="{StaticResource Chip}" />
-                                            <RadioButton Content="Summary" GroupName="NoteTab" IsChecked="{Binding ShowSummary}" IsEnabled="{Binding HasSummary}"
+                                            <RadioButton Content="Summary" GroupName="NoteTab" IsChecked="{Binding ShowSummary}" IsEnabled="{Binding CanOpenSummary}"
                                                          Style="{StaticResource Chip}"
-                                                         ToolTip="Written when 'Summary and action items' is on for the file" />
+                                                         ToolTip="Summary, decisions and action items" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                                             <Button Content="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6" Margin="8,0,0,0"
@@ -739,28 +810,68 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Grid.Row="1" Margin="16,0,12,8" Visibility="{Binding ShowTranscript, Converter={StaticResource Visible}}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search the transcript; Enter jumps to the next hit">
-                                            <TextBox.InputBindings>
-                                                <KeyBinding Key="Enter" Command="{Binding NextMatch}" />
-                                            </TextBox.InputBindings>
-                                        </TextBox>
-                                        <TextBlock Text="Search the transcript" Style="{StaticResource Caption}" TextWrapping="NoWrap" Margin="12,0,0,0"
-                                                   VerticalAlignment="Center" HorizontalAlignment="Left" IsHitTestVisible="False"
-                                                   Visibility="{Binding SearchText, Converter={StaticResource EmptyToVisible}}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding MatchText}" Style="{StaticResource Caption}" TextWrapping="NoWrap"
-                                                   VerticalAlignment="Center" Margin="10,0,6,0" />
-                                        <Button Grid.Column="2" Content="&#xE70E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6"
-                                                Command="{Binding PreviousMatch}" ToolTip="Previous hit" />
-                                        <Button Grid.Column="3" Content="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6"
-                                                Command="{Binding NextMatch}" Margin="4,0,0,0" ToolTip="Next hit" />
-                                    </Grid>
+                                    <StackPanel Grid.Row="1" Margin="16,0,12,8" Visibility="{Binding ShowTranscript, Converter={StaticResource Visible}}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search the transcript; Enter jumps to the next hit">
+                                                <TextBox.InputBindings>
+                                                    <KeyBinding Key="Enter" Command="{Binding NextMatch}" />
+                                                </TextBox.InputBindings>
+                                            </TextBox>
+                                            <TextBlock Text="Search the transcript" Style="{StaticResource Caption}" TextWrapping="NoWrap" Margin="12,0,0,0"
+                                                       VerticalAlignment="Center" HorizontalAlignment="Left" IsHitTestVisible="False"
+                                                       Visibility="{Binding SearchText, Converter={StaticResource EmptyToVisible}}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding MatchText}" Style="{StaticResource Caption}" TextWrapping="NoWrap"
+                                                       VerticalAlignment="Center" Margin="10,0,6,0" />
+                                            <Button Grid.Column="2" Content="&#xE70E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6"
+                                                    Command="{Binding PreviousMatch}" ToolTip="Previous hit" />
+                                            <Button Grid.Column="3" Content="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6"
+                                                    Command="{Binding NextMatch}" Margin="4,0,0,0" ToolTip="Next hit" />
+                                            <Button Grid.Column="4" Content="Replace" Padding="10,6" Margin="8,0,0,0" Command="{Binding ToggleReplace}"
+                                                    ToolTip="Replace the searched word everywhere in this transcript" />
+                                        </Grid>
+                                        <Grid Margin="0,8,0,0" Visibility="{Binding ShowReplace, Converter={StaticResource Visible}}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Text="{Binding ReplaceText, UpdateSourceTrigger=PropertyChanged}" ToolTip="What to put in place of the searched text" />
+                                            <TextBlock Text="Replace with" Style="{StaticResource Caption}" TextWrapping="NoWrap" Margin="12,0,0,0"
+                                                       VerticalAlignment="Center" HorizontalAlignment="Left" IsHitTestVisible="False"
+                                                       Visibility="{Binding ReplaceText, Converter={StaticResource EmptyToVisible}}" />
+                                            <Button Grid.Column="1" Content="Replace all" Command="{Binding ReplaceAll}" Margin="8,0,0,0" Padding="12,6" />
+                                        </Grid>
+                                        <TextBlock Text="{Binding ReplaceMessage}" Style="{StaticResource Caption}" Margin="2,4,0,0"
+                                                   Visibility="{Binding ShowReplace, Converter={StaticResource Visible}}" />
+                                        <!-- Words that were corrected, for the dictionary -->
+                                        <Border Margin="0,10,0,0" Padding="12,8" CornerRadius="10" Background="{StaticResource AccentSoft}"
+                                                Visibility="{Binding HasSuggestions, Converter={StaticResource Visible}}">
+                                            <StackPanel>
+                                                <TextBlock Text="Add these to your dictionary, so they come out right next time?" FontSize="12"
+                                                           TextWrapping="Wrap" Margin="0,0,0,6" />
+                                                <ItemsControl ItemsSource="{Binding Suggestions}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type ui:DictionarySuggestion}">
+                                                            <Button Content="{Binding Label}" Padding="10,4" Margin="0,0,6,6" FontSize="12"
+                                                                    Command="{Binding DataContext.AddSuggestion, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}" ToolTip="Add to the dictionary" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <Button Content="Dismiss" Command="{Binding DismissSuggestions}" HorizontalAlignment="Left"
+                                                        Padding="10,3" FontSize="12" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
 
                                     <Grid Grid.Row="2">
                                         <ListBox x:Name="TranscriptList" ItemsSource="{Binding Lines}" BorderThickness="0" Background="Transparent"
@@ -782,20 +893,18 @@
                                             </ListBox.ItemContainerStyle>
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate DataType="{x:Type ui:TranscriptLineViewModel}">
-                                                    <Button Style="{StaticResource FlatLine}" HorizontalContentAlignment="Stretch"
-                                                            Command="{Binding DataContext.SeekLine, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                            CommandParameter="{Binding}">
-                                                        <StackPanel>
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <Ellipse Width="8" Height="8" Fill="{Binding Brush}" Margin="0,0,6,0" VerticalAlignment="Center"
-                                                                         Visibility="{Binding HasSpeaker, Converter={StaticResource Visible}}" />
-                                                                <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="12" Margin="0,0,8,0"
-                                                                           Visibility="{Binding HasSpeaker, Converter={StaticResource Visible}}" />
-                                                                <TextBlock Text="{Binding Stamp}" Style="{StaticResource Caption}" FontFamily="Consolas" />
-                                                            </StackPanel>
-                                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                                        </StackPanel>
-                                                    </Button>
+                                                    <ContentControl Content="{Binding}">
+                                                        <ContentControl.Style>
+                                                            <Style TargetType="ContentControl">
+                                                                <Setter Property="ContentTemplate" Value="{StaticResource LineView}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                                        <Setter Property="ContentTemplate" Value="{StaticResource LineEdit}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </ContentControl.Style>
+                                                    </ContentControl>
                                                 </DataTemplate>
                                             </ListBox.ItemTemplate>
                                         </ListBox>
@@ -803,9 +912,36 @@
                                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,22,14" Padding="14,6"
                                                 Visibility="{Binding ShowSync, Converter={StaticResource Visible}}" />
 
-                                        <FlowDocumentScrollViewer ui:Markdown.Text="{Binding Summary}" Padding="20,0,14,14"
-                                                                  VerticalScrollBarVisibility="Auto" IsToolBarVisible="False"
-                                                                  Visibility="{Binding ShowSummary, Converter={StaticResource Visible}}" />
+                                        <Grid Visibility="{Binding ShowSummary, Converter={StaticResource Visible}}">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <FlowDocumentScrollViewer ui:Markdown.Text="{Binding Summary}" Padding="20,0,14,14"
+                                                                      VerticalScrollBarVisibility="Auto" IsToolBarVisible="False" />
+                                            <TextBlock Text="No summary yet." Style="{StaticResource Caption}" FontSize="14"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Visibility="{Binding Summary, Converter={StaticResource EmptyToVisible}}" />
+                                            <StackPanel Grid.Row="1" Margin="20,0,14,16">
+                                                <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,6"
+                                                           Text="The transcript was edited after this summary was written."
+                                                           Visibility="{Binding SummaryOutdated, Converter={StaticResource Visible}}" />
+                                                <TextBlock Text="{Binding SummaryError}" Foreground="#E5484D" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding SummaryError}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <Button Content="{Binding RegenerateLabel}" Command="{Binding RegenerateSummary}" HorizontalAlignment="Left"
+                                                        Padding="14,6" IsEnabled="{Binding SummaryAvailable}"
+                                                        ToolTip="Writes the summary, decisions and action items again from the transcript as it is now" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Grid>
                                 </Grid>
                             </Border>

@@ -48,7 +48,7 @@ public sealed class MainViewModel : ObservableObject
         Styles = new StylesViewModel(settings, rewriter, Save);
         Insights = new InsightsViewModel(usage);
         Loaded = new LoadedModelsViewModel(settings, models, engines);
-        Notetaker = new NotetakerViewModel(settings, notetaker, summarizer, voices, meetings, Save);
+        Notetaker = new NotetakerViewModel(settings, notetaker, summarizer, voices, meetings, dictionaryFiles, Save);
         _settings = settings;
         _models = models;
         _engines = engines;

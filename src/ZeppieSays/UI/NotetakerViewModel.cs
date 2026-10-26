@@ -6,6 +6,7 @@ using Microsoft.Win32;
 using ZeppieSays.Core;
 using ZeppieSays.Engines;
 using ZeppieSays.Notes;
+using ZeppieSays.Services;
 
 namespace ZeppieSays.UI;
 
@@ -13,13 +14,15 @@ namespace ZeppieSays.UI;
 /// The Notetaker page: the strip of recordings, and for the selected one the player, who spoke when, and the
 /// transcript and summary. Also the settings that apply to every file.
 /// </summary>
-public sealed class NotetakerViewModel : ObservableObject
+public sealed partial class NotetakerViewModel : ObservableObject
 {
     static readonly Brush NoSpeaker = new SolidColorBrush(Color.FromArgb(0x59, 0x80, 0x80, 0x80));
 
     readonly AppSettings _settings;
     readonly Notetaker _notetaker;
     readonly VoiceLibrary _voices;
+    readonly Summarizer _summarizer;
+    readonly DictionaryFiles _dictionaryFiles;
     readonly Action _save;
     Timeline? _timeline;
     int _currentLine = -1;
@@ -27,11 +30,13 @@ public sealed class NotetakerViewModel : ObservableObject
     int _matchAt = -1;
 
     public NotetakerViewModel(AppSettings settings, Notetaker notetaker, Summarizer summarizer, VoiceLibrary voices,
-        MeetingController meetings, Action save)
+        MeetingController meetings, DictionaryFiles dictionaryFiles, Action save)
     {
         _settings = settings;
         _notetaker = notetaker;
         _voices = voices;
+        _summarizer = summarizer;
+        _dictionaryFiles = dictionaryFiles;
         _save = save;
         Meetings = meetings;
         SummaryAvailable = summarizer.IsAvailable;
@@ -73,6 +78,8 @@ public sealed class NotetakerViewModel : ObservableObject
             FollowPlayback = true;
             if (_currentLine >= 0) ScrollToLine?.Invoke(Lines[_currentLine]);
         });
+
+        SetUpEditing();
 
         Playback.PropertyChanged += (_, e) =>
         {
@@ -253,7 +260,13 @@ public sealed class NotetakerViewModel : ObservableObject
     public string Summary
     {
         get => _summary;
-        private set { if (Set(ref _summary, value)) Raise(nameof(HasSummary)); }
+        private set
+        {
+            if (!Set(ref _summary, value)) return;
+            Raise(nameof(HasSummary));
+            Raise(nameof(CanOpenSummary));
+            Raise(nameof(RegenerateLabel));
+        }
     }
     string _summary = "";
 
@@ -321,6 +334,7 @@ public sealed class NotetakerViewModel : ObservableObject
         Peaks = null;
         FollowPlayback = true;
         SearchText = "";
+        ResetEditing();
         LoadTranscript();
         if (Selected is not { IsDone: true } job) return;
         if (AudioFile.IsAudio(job.AudioPath) && File.Exists(job.AudioPath))
@@ -347,24 +361,14 @@ public sealed class NotetakerViewModel : ObservableObject
         var parsed = TranscriptFile.Parse(File.ReadAllText(path));
         _timeline = Timeline.Load(path);
         Summary = parsed.Notes ?? "";
+        _title = parsed.Title;
 
-        var labels = parsed.Paragraphs.Select(p => p.Speaker).OfType<string>().Distinct().ToList();
-        Brush BrushFor(string? speaker) => speaker is null ? NoSpeaker : SpeakerColors.For(labels.IndexOf(speaker));
+        _brushes.Clear();
         foreach (var paragraph in parsed.Paragraphs)
             Lines.Add(new TranscriptLineViewModel(paragraph, BrushFor(paragraph.Speaker)));
-
-        var me = UserName.First;
-        var voiceprints = Transcript.LoadVoiceprints(path);
-        foreach (var label in labels)
-        {
-            var segments = _timeline?.Segments.Where(s => s.Speaker == label).ToList() ?? [];
-            SpeakerRows.Add(new SpeakerRowViewModel(label, BrushFor(label), segments,
-                canRename: label != me && voiceprints.ContainsKey(label), name => NameSpeaker(path, label, name)));
-        }
-        WaveSegments = SpeakerRows.SelectMany(r => r.Segments.Select(s => new ColoredSegment(s.Start, s.End, r.Brush))).ToList();
+        RebuildSpeakers();
         UpdateMatches();
         UpdateCurrentLine();
-        RaiseTimeline();
     }
 
     void RaiseTimeline()
@@ -473,15 +477,54 @@ public sealed class NotetakerViewModel : ObservableObject
     }
 }
 
-/// <summary>One paragraph of the transcript list: who said it, when, and whether it is the one playing or a search hit.</summary>
-public sealed class TranscriptLineViewModel(TranscriptParagraph paragraph, Brush brush) : ObservableObject
+/// <summary>
+/// One paragraph of the transcript list: who said it, when, whether it is the one playing or a search hit, and,
+/// while the user edits it, the text and speaker they are typing.
+/// </summary>
+public sealed class TranscriptLineViewModel : ObservableObject
 {
-    public double Seconds => paragraph.Seconds;
-    public string Stamp => Transcript.Stamp(paragraph.Seconds);
-    public string? Speaker => paragraph.Speaker;
-    public bool HasSpeaker => paragraph.Speaker is not null;
-    public string Text => paragraph.Text;
-    public Brush Brush => brush;
+    double _seconds;
+    string? _speaker;
+    string _text;
+    Brush _brush;
+
+    public TranscriptLineViewModel(TranscriptParagraph paragraph, Brush brush)
+    {
+        _seconds = paragraph.Seconds;
+        _speaker = paragraph.Speaker;
+        _text = paragraph.Text;
+        _brush = brush;
+    }
+
+    public TranscriptParagraph ToParagraph() => new(Seconds, Speaker, Text);
+
+    public double Seconds
+    {
+        get => _seconds;
+        set { if (Set(ref _seconds, value)) Raise(nameof(Stamp)); }
+    }
+
+    public string Stamp => Transcript.Stamp(Seconds);
+
+    public string? Speaker
+    {
+        get => _speaker;
+        set { if (Set(ref _speaker, value)) Raise(nameof(HasSpeaker)); }
+    }
+
+    public bool HasSpeaker => Speaker is not null;
+
+    public string Text
+    {
+        get => _text;
+        set => Set(ref _text, value);
+    }
+
+    public Brush Brush
+    {
+        get => _brush;
+        set => Set(ref _brush, value);
+    }
 
     public bool IsCurrent
     {
@@ -496,6 +539,44 @@ public sealed class TranscriptLineViewModel(TranscriptParagraph paragraph, Brush
         set => Set(ref _isMatch, value);
     }
     bool _isMatch;
+
+    // ---- Editing
+
+    public bool IsEditing
+    {
+        get => _isEditing;
+        set => Set(ref _isEditing, value);
+    }
+    bool _isEditing;
+
+    public string EditText
+    {
+        get => _editText;
+        set => Set(ref _editText, value ?? "");
+    }
+    string _editText = "";
+
+    /// <summary>The speaker box: a name from the list, or a new one typed in; empty means unknown.</summary>
+    public string EditSpeaker
+    {
+        get => _editSpeaker;
+        set => Set(ref _editSpeaker, value ?? "");
+    }
+    string _editSpeaker = "";
+
+    public bool CanMergeUp
+    {
+        get => _canMergeUp;
+        set => Set(ref _canMergeUp, value);
+    }
+    bool _canMergeUp;
+
+    public bool CanMergeDown
+    {
+        get => _canMergeDown;
+        set => Set(ref _canMergeDown, value);
+    }
+    bool _canMergeDown;
 }
 
 /// <summary>One speaker under the player: their colour, a name that can be edited, and when they talk.</summary>
