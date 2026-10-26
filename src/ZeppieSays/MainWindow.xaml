@@ -112,8 +112,15 @@
                                   ItemsSource="{Binding DataContext.SpeakerNames, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                   Text="{Binding EditSpeaker, UpdateSourceTrigger=PropertyChanged}"
                                   ToolTip="Who says this: pick a speaker, or type a new name" />
-                        <TextBlock Grid.Column="1" Text="{Binding Stamp}" Style="{StaticResource Caption}" FontFamily="Consolas"
-                                   VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock Text="Starts at" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBox Text="{Binding EditTime, UpdateSourceTrigger=PropertyChanged}" Width="72" FontFamily="Consolas"
+                                     HorizontalContentAlignment="Center" PreviewKeyDown="EditBox_KeyDown"
+                                     ToolTip="When this paragraph starts, like 1:05. It stays between the paragraph before and the one after." />
+                            <Button Content="&#xE916;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="8,5" Margin="4,0,0,0"
+                                    Command="{Binding DataContext.UseCurrentTime, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                    CommandParameter="{Binding}" ToolTip="Use the time of the player" AutomationProperties.Name="Use the time of the player" />
+                        </StackPanel>
                     </Grid>
                     <TextBox x:Name="EditBox" Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap"
                              MinHeight="64" Loaded="EditBox_Loaded" PreviewKeyDown="EditBox_KeyDown" />
@@ -138,6 +145,17 @@
                                 CommandParameter="{Binding}" ToolTip="Remove this paragraph from the transcript" />
                     </WrapPanel>
                     <TextBlock Style="{StaticResource Caption}" Text="Enter saves, Esc cancels." />
+                    <TextBlock Text="{Binding EditError}" Foreground="#E5484D" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding EditError}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Border>
         </DataTemplate>

@@ -79,6 +79,27 @@ public static partial class TranscriptFile
     [GeneratedRegex(@" · \d+ speakers?")]
     private static partial Regex SpeakerCount();
 
+    /// <summary>
+    /// What a person types for a time: "65" (seconds), "1:05" or "1:02:05". Minutes and seconds after the first
+    /// part must be under 60. False for anything else.
+    /// </summary>
+    public static bool TryParseStamp(string? text, out double seconds)
+    {
+        seconds = 0;
+        var parts = (text ?? "").Trim().Split(':');
+        if (parts.Length is < 1 or > 3) return false;
+        var total = 0d;
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length is 0 or > 6 || !parts[i].All(char.IsAsciiDigit)) return false;
+            var value = double.Parse(parts[i], CultureInfo.InvariantCulture);
+            if (i > 0 && value >= 60) return false;
+            total = total * 60 + value;
+        }
+        seconds = total;
+        return true;
+    }
+
     /// <summary>"05:03" or "1:05:03" in seconds.</summary>
     public static double ParseStamp(string stamp)
     {

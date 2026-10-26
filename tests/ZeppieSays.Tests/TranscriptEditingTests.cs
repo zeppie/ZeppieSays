@@ -90,6 +90,43 @@ public class TranscriptEditingTests
         Assert.Empty(WordDiff.Changes("Same words.", "Same words."));
     }
 
+    [Theory]
+    [InlineData("65", 65)]
+    [InlineData("1:05", 65)]
+    [InlineData(" 01:05 ", 65)]
+    [InlineData("1:02:05", 3725)]
+    [InlineData("0:00", 0)]
+    public void Reads_a_typed_time(string typed, double seconds)
+    {
+        Assert.True(TranscriptFile.TryParseStamp(typed, out var parsed));
+        Assert.Equal(seconds, parsed);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("1:75")]
+    [InlineData("1:2:3:4")]
+    [InlineData("-5")]
+    [InlineData("1.5")]
+    public void Refuses_a_time_that_is_not_one(string typed) => Assert.False(TranscriptFile.TryParseStamp(typed, out _));
+
+    [Fact]
+    public void Moving_a_start_earlier_takes_time_from_the_speaker_before()
+    {
+        var timeline = new Timeline { Segments = [new("A", 0, 10), new("B", 10, 20)] };
+        timeline.Reassign(8, 10, "A", "B"); // B's paragraph now starts at 8 instead of 10
+        Assert.Equal([new SpeakerSegment("A", 0, 8), new SpeakerSegment("B", 8, 20)], timeline.Segments);
+    }
+
+    [Fact]
+    public void Moving_a_start_later_gives_time_back_to_the_speaker_before()
+    {
+        var timeline = new Timeline { Segments = [new("A", 0, 10), new("B", 10, 20)] };
+        timeline.Reassign(10, 13, "B", "A"); // B's paragraph now starts at 13
+        Assert.Equal([new SpeakerSegment("A", 0, 13), new SpeakerSegment("B", 13, 20)], timeline.Segments);
+    }
+
     [Fact]
     public void Ignores_a_rewrite_and_filler_in_the_dictionary_candidates()
     {

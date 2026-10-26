@@ -577,6 +577,22 @@ public sealed class TranscriptLineViewModel : ObservableObject
         set => Set(ref _canMergeDown, value);
     }
     bool _canMergeDown;
+
+    /// <summary>The start time box: "1:05" or "1:02:05".</summary>
+    public string EditTime
+    {
+        get => _editTime;
+        set => Set(ref _editTime, value ?? "");
+    }
+    string _editTime = "";
+
+    /// <summary>Why the paragraph can't be saved yet, shown under its box; null when there is nothing to say.</summary>
+    public string? EditError
+    {
+        get => _editError;
+        set => Set(ref _editError, value);
+    }
+    string? _editError;
 }
 
 /// <summary>One speaker under the player: their colour, a name that can be edited, and when they talk.</summary>

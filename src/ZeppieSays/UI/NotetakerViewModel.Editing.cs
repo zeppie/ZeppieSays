@@ -33,6 +33,7 @@ public sealed partial class NotetakerViewModel
     bool _timelineChanged;
 
     public RelayCommand EditLine { get; private set; } = null!;
+    public RelayCommand UseCurrentTime { get; private set; } = null!;
     public RelayCommand SaveEdit { get; private set; } = null!;
     public RelayCommand CancelEdit { get; private set; } = null!;
     public RelayCommand DeleteLine { get; private set; } = null!;
@@ -53,6 +54,10 @@ public sealed partial class NotetakerViewModel
     void SetUpEditing()
     {
         EditLine = new RelayCommand(p => { if (p is TranscriptLineViewModel line) BeginEdit(line); });
+        UseCurrentTime = new RelayCommand(p =>
+        {
+            if (p is TranscriptLineViewModel line) line.EditTime = Transcript.Stamp(Playback.Position);
+        });
         SaveEdit = new RelayCommand(p => { if (p is TranscriptLineViewModel line) Save(line); });
         CancelEdit = new RelayCommand(p => { if (p is TranscriptLineViewModel line) line.IsEditing = false; });
         DeleteLine = new RelayCommand(p => { if (p is TranscriptLineViewModel line) Delete(line); });
@@ -121,6 +126,8 @@ public sealed partial class NotetakerViewModel
         var index = Lines.IndexOf(line);
         line.EditText = line.Text;
         line.EditSpeaker = line.Speaker ?? "";
+        line.EditTime = line.Stamp;
+        line.EditError = null;
         line.CanMergeUp = index > 0;
         line.CanMergeDown = index >= 0 && index < Lines.Count - 1;
         line.IsEditing = true;
@@ -131,18 +138,33 @@ public sealed partial class NotetakerViewModel
     {
         var text = line.EditText.Trim();
         if (text.Length == 0) return; // an empty paragraph is a delete, which has its own button
+        if (!TranscriptFile.TryParseStamp(line.EditTime, out var typedTime))
+        {
+            line.EditError = "A time looks like 1:05 (minutes:seconds), or 1:02:05 with hours.";
+            return;
+        }
+        line.EditError = null;
         var speaker = line.EditSpeaker.Trim() is { Length: > 0 } name ? name : null;
+        var index = Lines.IndexOf(line);
+        var newTime = ClampTime(index, typedTime);
         var textChanged = text != line.Text;
         var speakerChanged = speaker != line.Speaker;
-        if (!textChanged && !speakerChanged)
+        var timeChanged = Math.Floor(newTime) != Math.Floor(line.Seconds); // the file keeps whole seconds
+        if (!textChanged && !speakerChanged && !timeChanged)
         {
             line.IsEditing = false;
             return;
         }
 
         BeginChange();
-        var index = Lines.IndexOf(line);
         var (oldText, oldSpeaker) = (line.Text, line.Speaker);
+        if (timeChanged)
+        {
+            var oldTime = line.Seconds;
+            MoveStart(index, oldTime, newTime);
+            line.Seconds = newTime;
+            _log?.Add("time", oldTime, oldSpeaker, oldSpeaker, Transcript.Stamp(oldTime), Transcript.Stamp(newTime));
+        }
         if (speakerChanged)
         {
             Reassign(index, oldSpeaker, speaker);
@@ -160,6 +182,33 @@ public sealed partial class NotetakerViewModel
 
         if (textChanged) Suggest(oldText, text);
         if (speakerChanged && speaker is not null) TeachVoice(speaker, line.Seconds, EndOf(index));
+    }
+
+    /// <summary>
+    /// A paragraph starts between the one before it and the one after it, in whole seconds, so the order never
+    /// changes. Anything else is brought to the nearest time that fits.
+    /// </summary>
+    double ClampTime(int index, double time)
+    {
+        var min = index > 0 ? Math.Floor(Lines[index - 1].Seconds) + 1 : 0;
+        var max = index < Lines.Count - 1 ? Math.Floor(Lines[index + 1].Seconds) - 1
+            : Duration > 0 ? Math.Floor(Duration) : double.MaxValue;
+        return min > max ? Lines[index].Seconds : Math.Clamp(Math.Round(time), min, max);
+    }
+
+    /// <summary>
+    /// The paragraph now starts at another time, which moves where the speaker before it stops and this one starts:
+    /// starting earlier takes time from the previous speaker, starting later gives it back.
+    /// </summary>
+    void MoveStart(int index, double oldTime, double newTime)
+    {
+        if (index <= 0 || _timeline is not { Segments.Count: > 0 }) return;
+        var previous = Lines[index - 1].Speaker;
+        var mine = Lines[index].Speaker;
+        if (previous is null || mine is null || previous == mine) return;
+        if (newTime < oldTime) _timeline.Reassign(newTime, oldTime, previous, mine);
+        else _timeline.Reassign(oldTime, newTime, mine, previous);
+        _timelineChanged = true;
     }
 
     /// <summary>
