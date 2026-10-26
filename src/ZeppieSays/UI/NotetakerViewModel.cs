@@ -199,7 +199,7 @@ public sealed partial class NotetakerViewModel : ObservableObject
     public bool ShowPlaceholder => Selected is null || (!Selected.IsDone && !Selected.IsReady);
 
     public string Placeholder => Selected is null
-        ? "Pick a recording above, press Record now, or drop audio files on this page."
+        ? "Pick a recording above, press the red record button, or drop audio files on this page."
         : Selected.StatusText;
 
     void RaisePlaceholder()

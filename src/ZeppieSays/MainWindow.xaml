@@ -71,6 +71,33 @@
             </Setter>
         </Style>
         <!-- A paragraph of the transcript as read: click to jump there, the pencil (on hover) to edit it -->
+        <!-- Small round icon buttons -->
+        <Style x:Key="RoundButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="Disc" Fill="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                     Stroke="{DynamicResource CardStrokeColorDefaultBrush}" StrokeThickness="1" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Disc" Property="Fill" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Disc" Property="Opacity" Value="0.7" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.35" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <DataTemplate x:Key="LineView" DataType="{x:Type ui:TranscriptLineViewModel}">
             <Grid x:Name="Root" Background="Transparent">
                 <Button Style="{StaticResource FlatLine}" HorizontalContentAlignment="Stretch"
@@ -519,37 +546,68 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <!-- Record, add files, and every recording, newest first; scrolls sideways when there are many -->
-                    <Grid Margin="0,0,0,14">
+                    <!-- Record and add files as two small round buttons, then every recording, newest first. No scrollbar:
+                         drag the cards, use the arrows, and the thin line shows where you are among them. -->
+                    <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Button Command="{Binding ToggleRecording}" MinHeight="64" Padding="20,0" VerticalAlignment="Stretch"
-                                Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="{Binding RecordLabel}">
-                            <StackPanel Orientation="Horizontal">
-                                <Ellipse Width="10" Height="10" Fill="#FF6B6F" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <TextBlock Text="{Binding RecordLabel}" VerticalAlignment="Center" />
-                            </StackPanel>
+                        <Button Style="{StaticResource RoundButton}" Width="48" Height="48" VerticalAlignment="Top" Margin="0,8,0,0"
+                                Command="{Binding ToggleRecording}" ToolTip="{Binding RecordLabel}"
+                                AutomationProperties.Name="{Binding RecordLabel}">
+                            <Grid>
+                                <Ellipse Width="18" Height="18" Fill="#E5484D">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Meetings.IsRecording}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <Rectangle Width="16" Height="16" RadiusX="3" RadiusY="3" Fill="#E5484D">
+                                    <Rectangle.Style>
+                                        <Style TargetType="Rectangle">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Meetings.IsRecording}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Rectangle.Style>
+                                </Rectangle>
+                            </Grid>
                         </Button>
-                        <Button Grid.Column="1" Command="{Binding BrowseFiles}" MinHeight="64" Padding="18,0" Margin="8,0,0,0"
-                                VerticalAlignment="Stretch" Background="{StaticResource AccentSoft}"
-                                BorderBrush="{StaticResource Accent}" BorderThickness="1.5"
-                                ToolTip="Drop audio or video files anywhere on this page, or click to pick them">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE898;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20"
-                                           Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Drop audio files" />
-                                    <TextBlock Text="or click to browse" Style="{StaticResource Caption}" />
-                                </StackPanel>
-                            </StackPanel>
+                        <Button Grid.Column="1" Style="{StaticResource RoundButton}" Width="48" Height="48" VerticalAlignment="Top"
+                                Margin="8,8,0,0" Command="{Binding BrowseFiles}"
+                                ToolTip="Add audio or video files (or drop them anywhere on this page)"
+                                AutomationProperties.Name="Add audio or video files">
+                            <TextBlock Text="&#xE898;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"
+                                       Foreground="{StaticResource Accent}" />
                         </Button>
-                        <ListBox x:Name="JobStrip" Grid.Column="2" ItemsSource="{Binding Jobs}" SelectedItem="{Binding Selected}"
-                                 BorderThickness="0" Background="Transparent" Margin="12,0,0,0"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 PreviewMouseWheel="JobStrip_PreviewMouseWheel">
+                        <Button x:Name="StripLeft" Grid.Column="2" Style="{StaticResource RoundButton}" Width="32" Height="32"
+                                VerticalAlignment="Top" Margin="14,16,0,0" Visibility="Collapsed" IsEnabled="False" Click="StripLeft_Click"
+                                ToolTip="Earlier recordings" AutomationProperties.Name="Scroll left">
+                            <TextBlock Text="&#xE76B;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" />
+                        </Button>
+                        <Grid Grid.Column="3" Margin="8,0,8,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                        <ListBox x:Name="JobStrip" ItemsSource="{Binding Jobs}" SelectedItem="{Binding Selected}"
+                                 BorderThickness="0" Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Hidden" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                 ScrollViewer.CanContentScroll="False" SizeChanged="JobStrip_SizeChanged"
+                                 PreviewMouseWheel="JobStrip_PreviewMouseWheel" PreviewMouseLeftButtonDown="JobStrip_PreviewMouseDown"
+                                 PreviewMouseMove="JobStrip_PreviewMouseMove" PreviewMouseLeftButtonUp="JobStrip_PreviewMouseUp">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <VirtualizingStackPanel Orientation="Horizontal" />
@@ -608,6 +666,18 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
+                            <!-- Where you are among the recordings -->
+                            <Border x:Name="StripTrack" Grid.Row="1" Height="3" CornerRadius="1.5" Margin="0,5,0,0" IsHitTestVisible="False"
+                                    Visibility="Collapsed" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                <Border x:Name="StripThumb" HorizontalAlignment="Left" Width="40" CornerRadius="1.5"
+                                        Background="{StaticResource Accent}" />
+                            </Border>
+                        </Grid>
+                        <Button x:Name="StripRight" Grid.Column="4" Style="{StaticResource RoundButton}" Width="32" Height="32"
+                                VerticalAlignment="Top" Margin="0,16,0,0" Visibility="Collapsed" Click="StripRight_Click"
+                                ToolTip="Older recordings" AutomationProperties.Name="Scroll right">
+                            <TextBlock Text="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" />
+                        </Button>
                     </Grid>
 
                     <Grid Grid.Row="1">

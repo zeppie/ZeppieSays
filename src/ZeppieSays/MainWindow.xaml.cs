@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ZeppieSays.UI;
 
 namespace ZeppieSays;
@@ -24,12 +25,132 @@ public partial class MainWindow : Window
         };
         IsVisibleChanged += (_, _) => UpdateLoadedModelsPolling();
         model.Notetaker.ScrollToLine += line => TranscriptList.ScrollIntoView(line);
+
+        _stripGlide.Tick += (_, _) => GlideStrip();
+        JobStrip.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, _) => UpdateStrip()));
+        Loaded += (_, _) => UpdateStrip();
+    }
+
+    // ---- The strip of recordings: no scrollbar; drag it, use the arrows or the wheel, and a thin line shows where you are.
+
+    readonly DispatcherTimer _stripGlide = new() { Interval = TimeSpan.FromMilliseconds(15) };
+    double _stripTarget;
+    Point _stripPressedAt;
+    double _stripPressedOffset;
+    bool _stripPressed, _stripDragging;
+
+    ScrollViewer? StripViewer => Descendant<ScrollViewer>(JobStrip);
+
+    /// <summary>Shows the arrows and the position line only when the recordings don't fit, and keeps them in step.</summary>
+    void UpdateStrip()
+    {
+        if (StripViewer is not { } viewer) return;
+        var overflow = viewer.ExtentWidth > viewer.ViewportWidth + 1;
+        var visibility = overflow ? Visibility.Visible : Visibility.Collapsed;
+        StripLeft.Visibility = StripRight.Visibility = StripTrack.Visibility = visibility;
+        if (!overflow) return;
+
+        StripLeft.IsEnabled = viewer.HorizontalOffset > 1;
+        StripRight.IsEnabled = viewer.HorizontalOffset < viewer.ScrollableWidth - 1;
+        var track = JobStrip.ActualWidth;
+        var thumb = Math.Clamp(track * viewer.ViewportWidth / viewer.ExtentWidth, 28, track);
+        StripThumb.Width = thumb;
+        StripThumb.Margin = new Thickness((track - thumb) * (viewer.HorizontalOffset / Math.Max(1, viewer.ScrollableWidth)), 0, 0, 0);
+    }
+
+    void JobStrip_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateStrip();
+
+    void StripLeft_Click(object sender, RoutedEventArgs e) => MoveStrip(-1);
+    void StripRight_Click(object sender, RoutedEventArgs e) => MoveStrip(1);
+
+    /// <summary>One step of most of a screen to the left or right, gliding there.</summary>
+    void MoveStrip(int direction)
+    {
+        if (StripViewer is not { } viewer) return;
+        var from = _stripGlide.IsEnabled ? _stripTarget : viewer.HorizontalOffset;
+        _stripTarget = Math.Clamp(from + direction * viewer.ViewportWidth * 0.8, 0, viewer.ScrollableWidth);
+        _stripGlide.Start();
+    }
+
+    void GlideStrip()
+    {
+        if (StripViewer is not { } viewer)
+        {
+            _stripGlide.Stop();
+            return;
+        }
+        var distance = _stripTarget - viewer.HorizontalOffset;
+        if (Math.Abs(distance) < 1)
+        {
+            viewer.ScrollToHorizontalOffset(_stripTarget);
+            _stripGlide.Stop();
+        }
+        else viewer.ScrollToHorizontalOffset(viewer.HorizontalOffset + distance * 0.25);
+    }
+
+    // Pressing and moving the mouse drags the cards; a press that doesn't move selects the card, as a click does.
+    void JobStrip_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (StripViewer is not { } viewer || IsInside<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource)) return;
+        _stripGlide.Stop();
+        _stripPressed = true;
+        _stripDragging = false;
+        _stripPressedAt = e.GetPosition(JobStrip);
+        _stripPressedOffset = viewer.HorizontalOffset;
+        e.Handled = true; // the card is selected when the mouse is released, unless this turns out to be a drag
+    }
+
+    void JobStrip_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_stripPressed || StripViewer is not { } viewer) return;
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            _stripPressed = false;
+            return;
+        }
+        var moved = e.GetPosition(JobStrip).X - _stripPressedAt.X;
+        if (!_stripDragging && Math.Abs(moved) > 6)
+        {
+            _stripDragging = true;
+            JobStrip.CaptureMouse();
+        }
+        if (_stripDragging) viewer.ScrollToHorizontalOffset(_stripPressedOffset - moved);
+    }
+
+    void JobStrip_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_stripPressed) return;
+        _stripPressed = false;
+        if (_stripDragging)
+        {
+            _stripDragging = false;
+            JobStrip.ReleaseMouseCapture();
+            e.Handled = true;
+            return;
+        }
+        for (var d = e.OriginalSource as DependencyObject; d is not null; d = ParentOf(d))
+            if (d is ListBoxItem item)
+            {
+                item.IsSelected = true;
+                break;
+            }
+    }
+
+    static DependencyObject? ParentOf(DependencyObject d) =>
+        d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+
+    static bool IsInside<T>(object? source) where T : DependencyObject
+    {
+        for (var d = source as DependencyObject; d is not null; d = ParentOf(d))
+            if (d is T) return true;
+        return false;
     }
 
     // The recordings strip scrolls sideways, so the mouse wheel does too.
     void JobStrip_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (Descendant<ScrollViewer>(JobStrip) is not { } viewer) return;
+        if (StripViewer is not { } viewer) return;
+        _stripGlide.Stop();
         viewer.ScrollToHorizontalOffset(viewer.HorizontalOffset - e.Delta);
         e.Handled = true;
     }
