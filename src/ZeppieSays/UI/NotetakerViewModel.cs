@@ -1,19 +1,30 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Windows.Media;
 using Microsoft.Win32;
 using ZeppieSays.Core;
+using ZeppieSays.Engines;
 using ZeppieSays.Notes;
 
 namespace ZeppieSays.UI;
 
-/// <summary>The Notetaker page: where audio files go, how they're transcribed, and the list of transcripts.</summary>
+/// <summary>
+/// The Notetaker page: the strip of recordings, and for the selected one the player, who spoke when, and the
+/// transcript and summary. Also the settings that apply to every file.
+/// </summary>
 public sealed class NotetakerViewModel : ObservableObject
 {
+    static readonly Brush NoSpeaker = new SolidColorBrush(Color.FromArgb(0x59, 0x80, 0x80, 0x80));
+
     readonly AppSettings _settings;
     readonly Notetaker _notetaker;
     readonly VoiceLibrary _voices;
     readonly Action _save;
+    Timeline? _timeline;
+    int _currentLine = -1;
+    List<int> _matches = [];
+    int _matchAt = -1;
 
     public NotetakerViewModel(AppSettings settings, Notetaker notetaker, Summarizer summarizer, VoiceLibrary voices,
         MeetingController meetings, Action save)
@@ -47,18 +58,40 @@ public sealed class NotetakerViewModel : ObservableObject
             if (job == Selected) Selected = null;
             _notetaker.Discard(job);
         });
+        BrowseFiles = new RelayCommand(_ => PickFiles());
+        SeekCommand = new RelayCommand(p => { if (p is double seconds) Playback.Seek(seconds); });
+        SeekLine = new RelayCommand(p =>
+        {
+            if (p is not TranscriptLineViewModel line) return;
+            FollowPlayback = true;
+            Playback.Seek(line.Seconds);
+        });
+        NextMatch = new RelayCommand(_ => StepMatch(1));
+        PreviousMatch = new RelayCommand(_ => StepMatch(-1));
+        SyncNow = new RelayCommand(_ =>
+        {
+            FollowPlayback = true;
+            if (_currentLine >= 0) ScrollToLine?.Invoke(Lines[_currentLine]);
+        });
 
-        // Show a transcript as soon as the selected file finishes.
+        Playback.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Playback.Position)) UpdateCurrentLine();
+            if (e.PropertyName == nameof(Playback.Duration)) Raise(nameof(Duration));
+        };
+
+        // Show a transcript as soon as the selected file finishes, and open the settings of a file just dropped.
         Jobs.CollectionChanged += (_, e) =>
         {
             foreach (NoteJob job in e.NewItems ?? Array.Empty<NoteJob>())
             {
                 job.PropertyChanged += (s, args) =>
                 {
-                    if (args.PropertyName == nameof(NoteJob.TranscriptPath) && s == Selected) LoadPreview();
+                    if (args.PropertyName == nameof(NoteJob.TranscriptPath) && s == Selected) LoadSelected();
                     if (args.PropertyName == nameof(NoteJob.IsReady)) Raise(nameof(HasSeveralReady));
+                    if (s == Selected && args.PropertyName is nameof(NoteJob.Status) or nameof(NoteJob.StatusText)) RaisePlaceholder();
                 };
-                if (job.IsReady) Selected = job; // a dropped file opens its settings straight away
+                if (job.IsReady) Selected = job;
             }
             Raise(nameof(HasSeveralReady));
         };
@@ -76,9 +109,6 @@ public sealed class NotetakerViewModel : ObservableObject
         set { Options.AskToRecordMeetings = value; _save(); Raise(); }
     }
 
-    /// <summary>The speakers in the selected transcript, to name them (and teach the voice library).</summary>
-    public ObservableCollection<SpeakerNameViewModel> SpeakerNames { get; } = [];
-
     public ObservableCollection<NoteJob> Jobs => _notetaker.Jobs;
     public bool SummaryAvailable { get; }
 
@@ -90,11 +120,14 @@ public sealed class NotetakerViewModel : ObservableObject
     public RelayCommand StartJob { get; }
     public RelayCommand StartAll { get; }
     public RelayCommand DiscardJob { get; }
+    public RelayCommand BrowseFiles { get; }
 
     /// <summary>More than one dropped file is waiting, so "Start all" makes sense.</summary>
     public bool HasSeveralReady => Jobs.Count(j => j.IsReady) > 1;
 
     public string Folder => Options.Folder;
+
+    // ---- The general settings, edited on the Settings page.
 
     public string ModelId
     {
@@ -141,31 +174,245 @@ public sealed class NotetakerViewModel : ObservableObject
         set { Options.UseDictionary = value; _save(); Raise(); }
     }
 
+    // ---- The selected recording.
+
     public NoteJob? Selected
     {
         get => _selected;
         set
         {
-            if (Set(ref _selected, value)) LoadPreview();
+            if (!Set(ref _selected, value)) return;
+            LoadSelected();
+            RaisePlaceholder();
         }
     }
     NoteJob? _selected;
 
-    void LoadPreview()
+    /// <summary>Shown instead of the recording while nothing is selected, or the file is still being transcribed or failed.</summary>
+    public bool ShowPlaceholder => Selected is null || (!Selected.IsDone && !Selected.IsReady);
+
+    public string Placeholder => Selected is null
+        ? "Pick a recording above, press Record now, or drop audio files on this page."
+        : Selected.StatusText;
+
+    void RaisePlaceholder()
     {
-        var path = Selected?.TranscriptPath;
-        Preview = path is not null && File.Exists(path) ? File.ReadAllText(path) : "";
-        SpeakerNames.Clear();
-        if (path is not null)
-        {
-            var me = UserName.First;
-            foreach (var label in Transcript.LoadVoiceprints(path).Keys.Where(l => l != me).Order())
-                SpeakerNames.Add(new SpeakerNameViewModel(label, name => NameSpeaker(path, label, name)));
-        }
-        Raise(nameof(HasSpeakers));
+        Raise(nameof(ShowPlaceholder));
+        Raise(nameof(Placeholder));
     }
 
-    public bool HasSpeakers => SpeakerNames.Count > 0;
+    public Playback Playback { get; } = new();
+
+    /// <summary>The length the waveform and speaker tracks are drawn for: the player's, or the saved one before it has loaded.</summary>
+    public double Duration => Playback.Duration > 0 ? Playback.Duration : _timeline?.Duration ?? 0;
+
+    public float[]? Peaks
+    {
+        get => _peaks;
+        private set => Set(ref _peaks, value);
+    }
+    float[]? _peaks;
+
+    public ObservableCollection<TranscriptLineViewModel> Lines { get; } = [];
+    public ObservableCollection<SpeakerRowViewModel> SpeakerRows { get; } = [];
+
+    /// <summary>Whether the selected transcript has saved speaker segments. Older ones don't.</summary>
+    public bool HasTimeline => _timeline is { Segments.Count: > 0 };
+    public bool HasSpeakers => SpeakerRows.Count > 0;
+    public bool ShowTimelineHint => HasSpeakers && !HasTimeline;
+
+    public RelayCommand SeekCommand { get; }
+    public RelayCommand SeekLine { get; }
+
+    /// <summary>Asked of the page: scroll the transcript to this paragraph.</summary>
+    public event Action<TranscriptLineViewModel>? ScrollToLine;
+
+    // ---- Tabs: transcript or summary.
+
+    public bool ShowSummary
+    {
+        get => _showSummary;
+        set { if (Set(ref _showSummary, value)) Raise(nameof(ShowTranscript)); }
+    }
+    bool _showSummary;
+
+    public bool ShowTranscript
+    {
+        get => !_showSummary;
+        set { if (value) ShowSummary = false; }
+    }
+
+    public string Summary
+    {
+        get => _summary;
+        private set { if (Set(ref _summary, value)) Raise(nameof(HasSummary)); }
+    }
+    string _summary = "";
+
+    public bool HasSummary => Summary.Length > 0;
+
+    // ---- Following the playback, and searching.
+
+    /// <summary>Keeps the paragraph being played in view. Scrolling by hand turns it off until "Sync with playback".</summary>
+    public bool FollowPlayback
+    {
+        get => _follow;
+        set { if (Set(ref _follow, value)) Raise(nameof(ShowSync)); }
+    }
+    bool _follow = true;
+
+    public bool ShowSync => !FollowPlayback && Playback.IsOpen;
+    public RelayCommand SyncNow { get; }
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (Set(ref _searchText, value ?? "")) UpdateMatches();
+        }
+    }
+    string _searchText = "";
+
+    public string MatchText => SearchText.Length == 0 ? ""
+        : _matches.Count == 0 ? "No matches"
+        : _matchAt < 0 ? $"{_matches.Count} matches"
+        : $"{_matchAt + 1} of {_matches.Count}";
+
+    public RelayCommand NextMatch { get; }
+    public RelayCommand PreviousMatch { get; }
+
+    void UpdateMatches()
+    {
+        foreach (var line in Lines) line.IsMatch = false;
+        _matches = SearchText.Length == 0
+            ? []
+            : Enumerable.Range(0, Lines.Count)
+                .Where(i => Lines[i].Text.Contains(SearchText, StringComparison.CurrentCultureIgnoreCase)).ToList();
+        foreach (var i in _matches) Lines[i].IsMatch = true;
+        _matchAt = -1;
+        Raise(nameof(MatchText));
+    }
+
+    void StepMatch(int step)
+    {
+        if (_matches.Count == 0) return;
+        _matchAt = _matchAt < 0 ? (step > 0 ? 0 : _matches.Count - 1) : (_matchAt + step + _matches.Count) % _matches.Count;
+        FollowPlayback = false;
+        ScrollToLine?.Invoke(Lines[_matches[_matchAt]]);
+        Raise(nameof(MatchText));
+    }
+
+    // ---- Loading the selected recording.
+
+    /// <summary>Opens the player and the transcript for the selected, finished recording (or clears them).</summary>
+    void LoadSelected()
+    {
+        Playback.Close();
+        _timeline = null;
+        Peaks = null;
+        FollowPlayback = true;
+        SearchText = "";
+        LoadTranscript();
+        if (Selected is not { IsDone: true } job) return;
+        if (AudioFile.IsAudio(job.AudioPath) && File.Exists(job.AudioPath))
+            Playback.Open(job.AudioPath);
+        Raise(nameof(ShowSync));
+        _ = LoadPeaksAsync(job);
+    }
+
+    /// <summary>Fills the transcript paragraphs, the summary and the speaker rows from the selected transcript's file.</summary>
+    void LoadTranscript()
+    {
+        Lines.Clear();
+        SpeakerRows.Clear();
+        _currentLine = -1;
+        _matches = [];
+        Summary = "";
+        if (Selected is not { IsDone: true, TranscriptPath: { } path } || !File.Exists(path))
+        {
+            RaiseTimeline();
+            return;
+        }
+
+        var parsed = TranscriptFile.Parse(File.ReadAllText(path));
+        _timeline = Timeline.Load(path);
+        Summary = parsed.Notes ?? "";
+
+        var labels = parsed.Paragraphs.Select(p => p.Speaker).OfType<string>().Distinct().ToList();
+        Brush BrushFor(string? speaker) => speaker is null ? NoSpeaker : SpeakerColors.For(labels.IndexOf(speaker));
+        foreach (var paragraph in parsed.Paragraphs)
+            Lines.Add(new TranscriptLineViewModel(paragraph, BrushFor(paragraph.Speaker)));
+
+        var me = UserName.First;
+        var voiceprints = Transcript.LoadVoiceprints(path);
+        foreach (var label in labels)
+        {
+            var segments = _timeline?.Segments.Where(s => s.Speaker == label).ToList() ?? [];
+            SpeakerRows.Add(new SpeakerRowViewModel(label, BrushFor(label), segments,
+                canRename: label != me && voiceprints.ContainsKey(label), name => NameSpeaker(path, label, name)));
+        }
+        UpdateMatches();
+        UpdateCurrentLine();
+        RaiseTimeline();
+    }
+
+    void RaiseTimeline()
+    {
+        Raise(nameof(HasSpeakers));
+        Raise(nameof(HasTimeline));
+        Raise(nameof(ShowTimelineHint));
+        Raise(nameof(Duration));
+    }
+
+    /// <summary>The waveform: from the saved timeline, or worked out from the audio (and saved) for older transcripts.</summary>
+    async Task LoadPeaksAsync(NoteJob job)
+    {
+        if (_timeline is { Peaks.Length: > 0 } saved)
+        {
+            Peaks = saved.Peaks;
+            return;
+        }
+        if (job.TranscriptPath is not { } markdown || !AudioFile.IsAudio(job.AudioPath) || !File.Exists(job.AudioPath)) return;
+        try
+        {
+            var (peaks, seconds) = await Task.Run(() =>
+            {
+                var samples = AudioFile.Load(job.AudioPath);
+                return (Timeline.ComputePeaks([samples]), samples.Length / (double)Audio.SampleRate);
+            });
+            if (Selected != job) return; // another recording was picked meanwhile
+            _timeline ??= new Timeline();
+            _timeline.Peaks = peaks;
+            if (_timeline.Duration <= 0) _timeline.Duration = seconds;
+            Peaks = peaks;
+            Raise(nameof(Duration));
+            await Task.Run(() => _timeline.Save(markdown));
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"Could not draw the waveform of {job.AudioPath}: {e.Message}");
+        }
+    }
+
+    /// <summary>Marks the paragraph being played and, when following, scrolls it into view.</summary>
+    void UpdateCurrentLine()
+    {
+        var position = Playback.Position + 0.25; // a paragraph lights up just before its first word
+        var index = -1;
+        for (int low = 0, high = Lines.Count - 1; low <= high;)
+        {
+            var mid = (low + high) / 2;
+            if (Lines[mid].Seconds <= position) { index = mid; low = mid + 1; }
+            else high = mid - 1;
+        }
+        if (index == _currentLine) return;
+        if (_currentLine >= 0 && _currentLine < Lines.Count) Lines[_currentLine].IsCurrent = false;
+        _currentLine = index;
+        if (index < 0) return;
+        Lines[index].IsCurrent = true;
+        if (FollowPlayback) ScrollToLine?.Invoke(Lines[index]);
+    }
 
     /// <summary>Renames a speaker in the transcript and remembers the voice, so the next recording knows them.</summary>
     void NameSpeaker(string markdown, string label, string name)
@@ -183,20 +430,20 @@ public sealed class NotetakerViewModel : ObservableObject
         {
             Log.Error($"Could not rename a speaker in {markdown}", e);
         }
-        LoadPreview();
+        // Rebuilt after the box that asked for the rename has let go of focus. The player keeps playing.
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(LoadTranscript);
     }
-
-    /// <summary>The selected transcript's Markdown.</summary>
-    public string Preview
-    {
-        get => _preview;
-        private set => Set(ref _preview, value);
-    }
-    string _preview = "";
 
     public void Start() => _notetaker.Watch();
 
     public void AddFiles(IEnumerable<string> paths) => _notetaker.AddFiles(paths);
+
+    void PickFiles()
+    {
+        var types = string.Join(";", AudioFile.Extensions.Select(e => "*" + e));
+        var dialog = new OpenFileDialog { Title = "Audio or video files to transcribe", Multiselect = true, Filter = $"Audio and video|{types}|All files|*.*" };
+        if (dialog.ShowDialog() == true) AddFiles(dialog.FileNames);
+    }
 
     void PickFolder()
     {
@@ -216,24 +463,63 @@ public sealed class NotetakerViewModel : ObservableObject
     }
 }
 
-/// <summary>One speaker of a transcript, with a box to type their name.</summary>
-public sealed class SpeakerNameViewModel : ObservableObject
+/// <summary>One paragraph of the transcript list: who said it, when, and whether it is the one playing or a search hit.</summary>
+public sealed class TranscriptLineViewModel(TranscriptParagraph paragraph, Brush brush) : ObservableObject
 {
-    public SpeakerNameViewModel(string label, Action<string> rename)
+    public double Seconds => paragraph.Seconds;
+    public string Stamp => Transcript.Stamp(paragraph.Seconds);
+    public string? Speaker => paragraph.Speaker;
+    public bool HasSpeaker => paragraph.Speaker is not null;
+    public string Text => paragraph.Text;
+    public Brush Brush => brush;
+
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set => Set(ref _isCurrent, value);
+    }
+    bool _isCurrent;
+
+    public bool IsMatch
+    {
+        get => _isMatch;
+        set => Set(ref _isMatch, value);
+    }
+    bool _isMatch;
+}
+
+/// <summary>One speaker under the player: their colour, a name that can be edited, and when they talk.</summary>
+public sealed class SpeakerRowViewModel : ObservableObject
+{
+    readonly Action<string> _rename;
+    string _name;
+
+    public SpeakerRowViewModel(string label, Brush brush, IReadOnlyList<SpeakerSegment> segments, bool canRename, Action<string> rename)
     {
         Label = label;
+        Brush = brush;
+        Segments = segments;
+        CanRename = canRename;
+        _rename = rename;
         _name = label;
-        Save = new RelayCommand(_ => rename(Name));
     }
 
     public string Label { get; }
+    public Brush Brush { get; }
+    public IReadOnlyList<SpeakerSegment> Segments { get; }
+    public bool CanRename { get; }
+    public bool IsReadOnly => !CanRename;
 
+    /// <summary>Typing a new name and leaving the box renames the speaker everywhere in the transcript.</summary>
     public string Name
     {
         get => _name;
-        set => Set(ref _name, value);
+        set
+        {
+            if (value is null) return;
+            var name = value.Trim();
+            if (!Set(ref _name, name) || name.Length == 0 || name == Label || !CanRename) return;
+            _rename(name);
+        }
     }
-    string _name;
-
-    public RelayCommand Save { get; }
 }

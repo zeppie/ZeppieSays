@@ -103,7 +103,7 @@ public sealed class Notetaker : IDisposable
         }
 
         foreach (var md in Directory.GetFiles(DoneDirectory, "*.md").OrderByDescending(File.GetLastWriteTime).Take(200))
-            Jobs.Add(new NoteJob(md) { Status = NoteStatus.Done, StatusText = "Done", TranscriptPath = md, When = File.GetLastWriteTime(md) });
+            Jobs.Add(new NoteJob(AudioBeside(md) ?? md) { Status = NoteStatus.Done, StatusText = "Done", TranscriptPath = md, When = File.GetLastWriteTime(md) });
 
         _watcher = new FileSystemWatcher(Options.Folder) { IncludeSubdirectories = false, EnableRaisingEvents = true };
         _watcher.Created += (_, e) => _ui.BeginInvoke(() => Enqueue(e.FullPath));
@@ -111,6 +111,10 @@ public sealed class Notetaker : IDisposable
         foreach (var file in Directory.GetFiles(Options.Folder).OrderBy(File.GetLastWriteTime))
             Enqueue(file);
     }
+
+    /// <summary>The audio or video file that was transcribed into this Markdown file, when it is still next to it.</summary>
+    public static string? AudioBeside(string markdownPath) =>
+        AudioFile.Extensions.Select(ext => Path.ChangeExtension(markdownPath, ext)).FirstOrDefault(File.Exists);
 
     /// <summary>
     /// Copies files the user dropped onto the page into the folder; the folder watch picks them up. They wait as
@@ -230,6 +234,14 @@ public sealed class Notetaker : IDisposable
 
             using (_engines.Hold(model.Info.Id))
                 await TranscribeAsync(turns, model, options, transcript, Report, ct);
+
+            transcript.Timeline = new Timeline
+            {
+                Duration = duration.TotalSeconds,
+                Segments = Timeline.Merge(turns.Where(t => t.Speaker is not null).Select(t =>
+                    new SpeakerSegment(t.Speaker!, t.Start / (double)Audio.SampleRate, t.End / (double)Audio.SampleRate))),
+                Peaks = Timeline.ComputePeaks(tracks),
+            };
 
             if (options.Summarize && transcript.Paragraphs.Sum(p => p.Text.Length) > 200)
             {
@@ -401,6 +413,7 @@ public sealed class Notetaker : IDisposable
         var markdown = Path.ChangeExtension(audio, ".md");
         File.WriteAllText(markdown, transcript.ToMarkdown());
         if (transcript.Voiceprints.Count > 0) transcript.SaveVoiceprints(markdown);
+        transcript.Timeline?.Save(markdown);
         File.Move(audioPath, audio);
         if (File.Exists(RecordingInfo.PathFor(audioPath)))
             File.Move(RecordingInfo.PathFor(audioPath), RecordingInfo.PathFor(audio));

@@ -17,6 +17,59 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
         <ui:EmptyToVisibleConverter x:Key="EmptyToVisible" />
+        <!-- Tabs above the transcript -->
+        <Style x:Key="Chip" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" CornerRadius="16" Padding="14,6" BorderThickness="1" Background="Transparent"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- One paragraph of the transcript: the one playing is tinted, search hits are marked -->
+        <Style x:Key="FlatLine" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="8" Padding="10,7" Margin="0,1" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Left" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsMatch}" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#40F5B400" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <DataTemplate x:Key="LoadedRow" DataType="{x:Type ui:LoadedModelRow}">
             <Grid Margin="0,4" Opacity="{Binding Dim}">
                 <Grid.ColumnDefinitions>
@@ -368,169 +421,120 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Notetaker: transcribe audio files dropped here or put in the folder -->
+            <!-- Notetaker: the recordings along the top; below, the selected one with its player, speakers and transcript -->
             <TabItem Header="Notetaker" Tag="&#xE7C8;" x:Name="NotetakerTab">
                 <Grid DataContext="{Binding Notetaker}" AllowDrop="True" Drop="Notetaker_Drop" DragOver="Notetaker_DragOver"
                       Background="Transparent" Margin="0,4,18,16">
-                    <!-- Transcripts, and the selected one -->
-                    <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Record, add files, and every recording, newest first; scrolls sideways when there are many -->
+                    <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="340" />
-                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel>
-                            <Button Command="{Binding ToggleRecording}" HorizontalAlignment="Stretch" Margin="0,0,0,10" Padding="0,8"
-                                    Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="{Binding RecordLabel}">
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="9" Height="9" Fill="#FF6B6F" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                    <TextBlock Text="{Binding RecordLabel}" />
-                                </StackPanel>
-                            </Button>
-                            <!-- Drop zone -->
-                            <Border CornerRadius="12" Padding="14,12" Margin="0,0,0,10" BorderThickness="1.5"
-                                    BorderBrush="{StaticResource Accent}" Background="{StaticResource AccentSoft}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="&#xE898;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20"
-                                               Foreground="{StaticResource Accent}" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="1" Margin="12,0,0,0" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
-                                               Text="Drop audio or video files here, or save them in the folder." />
-                                </Grid>
-                            </Border>
+                        <Button Command="{Binding ToggleRecording}" MinHeight="64" Padding="20,0" VerticalAlignment="Stretch"
+                                Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="{Binding RecordLabel}">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="10" Height="10" Fill="#FF6B6F" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Text="{Binding RecordLabel}" VerticalAlignment="Center" />
                             </StackPanel>
-                            <ListBox Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding Selected}"
-                                     BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                                <!-- Rows like the sidebar: rounded, a soft fill when selected -->
-                                <ListBox.ItemContainerStyle>
-                                    <Style TargetType="ListBoxItem">
-                                        <Setter Property="Cursor" Value="Hand" />
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="ListBoxItem">
-                                                    <Border x:Name="Bd" CornerRadius="10" Padding="10,4" Margin="0,1" Background="Transparent">
-                                                        <ContentPresenter />
-                                                    </Border>
-                                                    <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
-                                                        </Trigger>
-                                                        <Trigger Property="IsSelected" Value="True">
-                                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
-                                                        </Trigger>
-                                                    </ControlTemplate.Triggers>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Style>
-                                </ListBox.ItemContainerStyle>
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type notes:NoteJob}">
-                                        <Grid Margin="0,6">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <Border Width="36" Height="36" CornerRadius="10" Background="{StaticResource AccentSoft}" VerticalAlignment="Top">
-                                                <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Accent}" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" Margin="12,0,6,0">
-                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding StatusText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
-                                                           TextWrapping="NoWrap" ToolTip="{Binding StatusText}" />
-                                                <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="0,6,0,0"
-                                                             Foreground="{StaticResource Accent}"
-                                                             IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
-                                                             Visibility="{Binding IsWorking, Converter={StaticResource Visible}}" />
-                                            </StackPanel>
-                                            <Button Grid.Column="2" Content="Retry" Padding="10,3" VerticalAlignment="Center"
-                                                    Command="{Binding DataContext.Retry, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                    CommandParameter="{Binding}" Visibility="{Binding IsFailed, Converter={StaticResource Visible}}" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        </Grid>
-
-                        <!-- Preview -->
-                        <Border Grid.Column="2" Margin="0" Padding="0">
-                            <Border.Style>
-                                <Style TargetType="Border" BasedOn="{StaticResource Card}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Selected.IsReady}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
+                        </Button>
+                        <Button Grid.Column="1" Command="{Binding BrowseFiles}" MinHeight="64" Padding="18,0" Margin="8,0,0,0"
+                                VerticalAlignment="Stretch" Background="{StaticResource AccentSoft}"
+                                BorderBrush="{StaticResource Accent}" BorderThickness="1.5"
+                                ToolTip="Drop audio or video files anywhere on this page, or click to pick them">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE898;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20"
+                                           Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Drop audio files" />
+                                    <TextBlock Text="or click to browse" Style="{StaticResource Caption}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Button>
+                        <ListBox x:Name="JobStrip" Grid.Column="2" ItemsSource="{Binding Jobs}" SelectedItem="{Binding Selected}"
+                                 BorderThickness="0" Background="Transparent" Margin="12,0,0,0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                 PreviewMouseWheel="JobStrip_PreviewMouseWheel">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <!-- Cards like the sidebar: rounded, a soft fill when selected -->
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Cursor" Value="Hand" />
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border x:Name="Bd" CornerRadius="12" Padding="10,8" Margin="0,0,8,0" BorderThickness="1"
+                                                        Width="236" Background="Transparent" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                                    <ContentPresenter />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                                                        <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
                                 </Style>
-                            </Border.Style>
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-                                <!-- Name the speakers: renames them in the transcript and teaches the voice library -->
-                                <Border Grid.Row="1" Margin="20,0,14,10" Padding="12,8" CornerRadius="10"
-                                        Background="{StaticResource AccentSoft}"
-                                        Visibility="{Binding HasSpeakers, Converter={StaticResource Visible}}">
-                                    <StackPanel>
-                                        <TextBlock Text="Who's who? Name a speaker once and Zeppie Says recognises them next time."
-                                                   FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
-                                        <ItemsControl ItemsSource="{Binding SpeakerNames}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="{x:Type ui:SpeakerNameViewModel}">
-                                                    <StackPanel Orientation="Horizontal" Margin="0,2,10,2">
-                                                        <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="130"
-                                                                 ToolTip="{Binding Label}" />
-                                                        <Button Content="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                                Command="{Binding Save}" Margin="4,0,0,0" Padding="8,5" ToolTip="Save the name" />
-                                                    </StackPanel>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
-                                <Grid Margin="20,14,14,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Selected.Name, FallbackValue='Transcript', TargetNullValue='Transcript'}"
-                                               Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <Button Grid.Column="1" Content="Open" Margin="8,0,0,0" Command="{Binding OpenTranscript}"
-                                            CommandParameter="{Binding Selected}" IsEnabled="{Binding Selected.IsDone, FallbackValue=False}" />
-                                    <Button Grid.Column="2" Content="Show in folder" Margin="6,0,0,0" Command="{Binding ShowInFolder}"
-                                            CommandParameter="{Binding Selected}" IsEnabled="{Binding Selected.IsDone, FallbackValue=False}" />
-                                </Grid>
-                                <FlowDocumentScrollViewer Grid.Row="2" ui:Markdown.Text="{Binding Preview}" Padding="20,0,14,14"
-                                                          VerticalScrollBarVisibility="Auto" IsToolBarVisible="False" />
-                                <TextBlock Grid.Row="2" Style="{StaticResource Caption}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           FontSize="14" Text="Pick a transcript to read it here.">
-                                    <TextBlock.Visibility>
-                                        <Binding Path="Preview" Converter="{StaticResource EmptyToVisible}" />
-                                    </TextBlock.Visibility>
-                                </TextBlock>
-                            </Grid>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type notes:NoteJob}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="36" Height="36" CornerRadius="10" Background="{StaticResource AccentSoft}" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Accent}" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="10,0,6,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                                            <TextBlock Text="{Binding StatusText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
+                                                       TextWrapping="NoWrap" ToolTip="{Binding StatusText}" />
+                                            <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="0,5,0,0"
+                                                         Foreground="{StaticResource Accent}"
+                                                         IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
+                                                         Visibility="{Binding IsWorking, Converter={StaticResource Visible}}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Content="Retry" Padding="10,3" VerticalAlignment="Center"
+                                                Command="{Binding DataContext.Retry, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                CommandParameter="{Binding}" Visibility="{Binding IsFailed, Converter={StaticResource Visible}}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+
+                    <Grid Grid.Row="1">
+                        <!-- Nothing picked yet, or still being transcribed -->
+                        <Border Style="{StaticResource Card}" Margin="0" Visibility="{Binding ShowPlaceholder, Converter={StaticResource Visible}}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420">
+                                <TextBlock Text="{Binding Placeholder}" Style="{StaticResource Caption}" FontSize="14" TextAlignment="Center" />
+                                <ProgressBar Value="{Binding Selected.Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="0,12,0,0"
+                                             Foreground="{StaticResource Accent}"
+                                             IsIndeterminate="{Binding Selected.IsIndeterminate, Mode=OneWay}"
+                                             Visibility="{Binding Selected.IsWorking, Converter={StaticResource Visible}, FallbackValue=Collapsed}" />
+                            </StackPanel>
                         </Border>
+
                         <!-- A dropped file waits here: its own settings, then Start -->
-                        <Border Grid.Column="2" Margin="0" Padding="0">
+                        <Border Margin="0" Padding="0" HorizontalAlignment="Left" MaxWidth="680">
                             <Border.Style>
                                 <Style TargetType="Border" BasedOn="{StaticResource Card}">
                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -606,6 +610,211 @@
                                 </StackPanel>
                             </ScrollViewer>
                         </Border>
+
+                        <!-- A finished recording: player and speakers on the left, transcript and summary on the right -->
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Selected.IsDone}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="0.62*" MinWidth="340" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <!-- The picture for a video, a waveform for audio -->
+                                <Border CornerRadius="12" Background="#14161B" ClipToBounds="True" MinHeight="140">
+                                    <Grid>
+                                        <Border Background="{Binding Playback.VideoBrush}"
+                                                Visibility="{Binding Playback.ShowVideo, Converter={StaticResource Visible}}" />
+                                        <Grid Margin="20,16" Visibility="{Binding Playback.ShowWaveform, Converter={StaticResource Visible}}">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="{Binding Selected.Name}" Foreground="#E6E8EC" FontSize="14" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <ui:WaveformView Grid.Row="1" Margin="0,10,0,0" Peaks="{Binding Peaks}" Duration="{Binding Duration}"
+                                                             Position="{Binding Playback.Position}" SeekCommand="{Binding SeekCommand}" />
+                                        </Grid>
+                                        <TextBlock Text="The audio or video file is no longer next to its transcript, so it can't be played."
+                                                   Foreground="#A8ADB8" TextWrapping="Wrap" TextAlignment="Center" Margin="24"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Visibility="{Binding Playback.IsMissing, Converter={StaticResource Visible}}" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- Play, the time, and for a video a strip to jump around in -->
+                                <Border Grid.Row="1" Style="{StaticResource Card}" Padding="12,8" Margin="0,10,0,0"
+                                        Visibility="{Binding Playback.IsOpen, Converter={StaticResource Visible}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Command="{Binding Playback.PlayPauseCommand}" Width="40" Height="40" Padding="0"
+                                                Style="{DynamicResource AccentButtonStyle}" AutomationProperties.Name="Play or pause">
+                                            <TextBlock Text="{Binding Playback.PlayGlyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" />
+                                        </Button>
+                                        <TextBlock Grid.Column="1" Text="{Binding Playback.TimeText}" Margin="14,0,0,0" VerticalAlignment="Center"
+                                                   FontFamily="Consolas" />
+                                        <ui:WaveformView Grid.Column="2" Height="40" Margin="16,0,4,0" Peaks="{Binding Peaks}" Duration="{Binding Duration}"
+                                                         Position="{Binding Playback.Position}" SeekCommand="{Binding SeekCommand}"
+                                                         Visibility="{Binding Playback.ShowVideo, Converter={StaticResource Visible}}" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- Who spoke when; click a bar to jump there, click a name to change it -->
+                                <Border Grid.Row="2" Style="{StaticResource Card}" Padding="14,10" Margin="0,10,0,0"
+                                        Visibility="{Binding HasSpeakers, Converter={StaticResource Visible}}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource Caption}" Margin="4,0,0,4"
+                                                   Text="The timeline is available for files transcribed from now on. Names can still be changed."
+                                                   Visibility="{Binding ShowTimelineHint, Converter={StaticResource Visible}}" />
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="210">
+                                            <ItemsControl ItemsSource="{Binding SpeakerRows}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type ui:SpeakerRowViewModel}">
+                                                        <Grid Margin="0,2">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="168" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Ellipse Width="10" Height="10" Fill="{Binding Brush}" VerticalAlignment="Center" Margin="4,0,6,0" />
+                                                                <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsReadOnly}"
+                                                                         Width="140" BorderThickness="0" Background="Transparent" Padding="4,3"
+                                                                         VerticalAlignment="Center" KeyDown="SpeakerName_KeyDown"
+                                                                         ToolTip="{Binding Label}" />
+                                                            </StackPanel>
+                                                            <ui:SegmentTrack Grid.Column="1" Height="24" Segments="{Binding Segments}" Brush="{Binding Brush}"
+                                                                             Duration="{Binding DataContext.Duration, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                             Position="{Binding DataContext.Playback.Position, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                             SeekCommand="{Binding DataContext.SeekCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- Transcript and summary -->
+                            <Border Grid.Column="2" Style="{StaticResource Card}" Margin="0" Padding="0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <Grid Margin="16,14,12,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Content="Transcript" GroupName="NoteTab" IsChecked="{Binding ShowTranscript}" Style="{StaticResource Chip}" />
+                                            <RadioButton Content="Summary" GroupName="NoteTab" IsChecked="{Binding ShowSummary}" IsEnabled="{Binding HasSummary}"
+                                                         Style="{StaticResource Chip}"
+                                                         ToolTip="Written when 'Summary and action items' is on for the file" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                            <Button Content="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6" Margin="8,0,0,0"
+                                                    Command="{Binding OpenTranscript}" CommandParameter="{Binding Selected}"
+                                                    ToolTip="Open the transcript file" AutomationProperties.Name="Open the transcript file" />
+                                            <Button Content="&#xE838;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6" Margin="4,0,0,0"
+                                                    Command="{Binding ShowInFolder}" CommandParameter="{Binding Selected}"
+                                                    ToolTip="Show in folder" AutomationProperties.Name="Show in folder" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid Grid.Row="1" Margin="16,0,12,8" Visibility="{Binding ShowTranscript, Converter={StaticResource Visible}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search the transcript; Enter jumps to the next hit">
+                                            <TextBox.InputBindings>
+                                                <KeyBinding Key="Enter" Command="{Binding NextMatch}" />
+                                            </TextBox.InputBindings>
+                                        </TextBox>
+                                        <TextBlock Text="Search the transcript" Style="{StaticResource Caption}" TextWrapping="NoWrap" Margin="12,0,0,0"
+                                                   VerticalAlignment="Center" HorizontalAlignment="Left" IsHitTestVisible="False"
+                                                   Visibility="{Binding SearchText, Converter={StaticResource EmptyToVisible}}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding MatchText}" Style="{StaticResource Caption}" TextWrapping="NoWrap"
+                                                   VerticalAlignment="Center" Margin="10,0,6,0" />
+                                        <Button Grid.Column="2" Content="&#xE70E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6"
+                                                Command="{Binding PreviousMatch}" ToolTip="Previous hit" />
+                                        <Button Grid.Column="3" Content="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6"
+                                                Command="{Binding NextMatch}" Margin="4,0,0,0" ToolTip="Next hit" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="2">
+                                        <ListBox x:Name="TranscriptList" ItemsSource="{Binding Lines}" BorderThickness="0" Background="Transparent"
+                                                 Margin="6,0,6,6" HorizontalContentAlignment="Stretch"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 PreviewMouseWheel="Transcript_PreviewMouseWheel" PreviewMouseLeftButtonDown="Transcript_PreviewMouseDown"
+                                                 Visibility="{Binding ShowTranscript, Converter={StaticResource Visible}}">
+                                            <ListBox.ItemContainerStyle>
+                                                <Style TargetType="ListBoxItem">
+                                                    <Setter Property="Focusable" Value="False" />
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="ListBoxItem">
+                                                                <ContentPresenter />
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </ListBox.ItemContainerStyle>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type ui:TranscriptLineViewModel}">
+                                                    <Button Style="{StaticResource FlatLine}" HorizontalContentAlignment="Stretch"
+                                                            Command="{Binding DataContext.SeekLine, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                            CommandParameter="{Binding}">
+                                                        <StackPanel>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Ellipse Width="8" Height="8" Fill="{Binding Brush}" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                         Visibility="{Binding HasSpeaker, Converter={StaticResource Visible}}" />
+                                                                <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="12" Margin="0,0,8,0"
+                                                                           Visibility="{Binding HasSpeaker, Converter={StaticResource Visible}}" />
+                                                                <TextBlock Text="{Binding Stamp}" Style="{StaticResource Caption}" FontFamily="Consolas" />
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        <Button Content="Sync with playback" Command="{Binding SyncNow}" Style="{DynamicResource AccentButtonStyle}"
+                                                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,22,14" Padding="14,6"
+                                                Visibility="{Binding ShowSync, Converter={StaticResource Visible}}" />
+
+                                        <FlowDocumentScrollViewer ui:Markdown.Text="{Binding Summary}" Padding="20,0,14,14"
+                                                                  VerticalScrollBarVisibility="Auto" IsToolBarVisible="False"
+                                                                  Visibility="{Binding ShowSummary, Converter={StaticResource Visible}}" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </Grid>
                     </Grid>
                 </Grid>
             </TabItem>

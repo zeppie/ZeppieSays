@@ -23,6 +23,9 @@ public sealed class Transcript
     /// <summary>Each speaker's voiceprint by label, kept beside the transcript so speakers can be named later.</summary>
     public Dictionary<string, float[]> Voiceprints { get; } = [];
 
+    /// <summary>When each speaker talks and the recording's loudness, for the page's player; saved beside the transcript.</summary>
+    public Timeline? Timeline { get; set; }
+
     public int Speakers => Paragraphs.Select(p => p.Speaker).OfType<string>().Distinct().Count();
 
     /// <summary>The spoken text with timestamps and speakers, as the summarizer reads it.</summary>
@@ -58,6 +61,11 @@ public sealed class Transcript
         {
             voiceprints[to] = voice;
             File.WriteAllText(VoiceprintsPath(markdownPath), JsonSerializer.Serialize(voiceprints));
+        }
+        if (Timeline.Load(markdownPath) is { } timeline)
+        {
+            timeline.Rename(from, to);
+            timeline.Save(markdownPath);
         }
     }
 

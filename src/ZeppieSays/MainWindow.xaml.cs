@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using ZeppieSays.UI;
 
 namespace ZeppieSays;
@@ -22,6 +23,47 @@ public partial class MainWindow : Window
             UpdateLoadedModelsPolling();
         };
         IsVisibleChanged += (_, _) => UpdateLoadedModelsPolling();
+        model.Notetaker.ScrollToLine += line => TranscriptList.ScrollIntoView(line);
+    }
+
+    // The recordings strip scrolls sideways, so the mouse wheel does too.
+    void JobStrip_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Descendant<ScrollViewer>(JobStrip) is not { } viewer) return;
+        viewer.ScrollToHorizontalOffset(viewer.HorizontalOffset - e.Delta);
+        e.Handled = true;
+    }
+
+    // Scrolling the transcript by hand stops it following the playback until "Sync with playback".
+    void Transcript_PreviewMouseWheel(object sender, MouseWheelEventArgs e) => Model.Notetaker.FollowPlayback = false;
+
+    void Transcript_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        for (var d = e.OriginalSource as DependencyObject; d is not null && d != TranscriptList; d = VisualTreeHelper.GetParent(d))
+            if (d is System.Windows.Controls.Primitives.ScrollBar)
+            {
+                Model.Notetaker.FollowPlayback = false;
+                return;
+            }
+    }
+
+    /// <summary>Enter in a speaker's name box applies the name, like leaving the box does.</summary>
+    void SpeakerName_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        ((UIElement)sender).MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+        e.Handled = true;
+    }
+
+    static T? Descendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) return match;
+            if (Descendant<T>(child) is { } deeper) return deeper;
+        }
+        return null;
     }
 
     MainViewModel Model => (MainViewModel)DataContext;
