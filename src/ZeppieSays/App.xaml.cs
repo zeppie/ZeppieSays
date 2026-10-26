@@ -66,7 +66,8 @@ public partial class App : Application
         var rewriter = new TextRewriter(_settings);
         rewriter.WarmUpDefault(); // a model load takes seconds; do it now rather than on the first dictation
         var usage = UsageStore.Load();
-        _controller = new DictationController(_settings, _recorder, _engines, rewriter, usage, _hook, Dispatcher);
+        var history = new DictationHistory(_settings, Dispatcher);
+        _controller = new DictationController(_settings, _recorder, _engines, rewriter, usage, history, _hook, Dispatcher);
 
         var summarizer = new Notes.Summarizer(rewriter);
         var voices = Notes.VoiceLibrary.Load();
@@ -76,7 +77,7 @@ public partial class App : Application
         _meetings = new MeetingController(_settings, Dispatcher);
 
         var model = new MainViewModel(_settings, _models, _engines, _hook, rewriter, usage, _notetaker, summarizer, voices, _meetings,
-            _dictionaryFiles);
+            _dictionaryFiles, history);
         model.Notetaker.Start();
         _window = new MainWindow(model);
         _overlay = new OverlayWindow();

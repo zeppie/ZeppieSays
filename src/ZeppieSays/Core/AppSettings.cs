@@ -65,6 +65,8 @@ public sealed class AppSettings
     public bool UseScreenContext { get; set; } = true;
     public bool RemoveFillerWords { get; set; } = true;
     public bool UseGpu { get; set; } = true;
+    /// <summary>Shows the latest dictations on the Dictation page. Off until the user turns it on; never written to disk.</summary>
+    public bool KeepHistory { get; set; }
     public bool StartWithWindows { get; set; }
     /// <summary>NAudio WaveIn device number; -1 is the Windows default microphone.</summary>
     public int MicrophoneDevice { get; set; } = -1;

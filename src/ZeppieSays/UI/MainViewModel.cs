@@ -16,6 +16,7 @@ public sealed class MainViewModel : ObservableObject
     readonly ModelManager _models;
     readonly EngineCache _engines;
     readonly KeyboardHook _hook;
+    readonly DictationHistory _history;
 
     public StylesViewModel Styles { get; }
     public InsightsViewModel Insights { get; }
@@ -41,10 +42,12 @@ public sealed class MainViewModel : ObservableObject
 
     public MainViewModel(AppSettings settings, ModelManager models, EngineCache engines, KeyboardHook hook, Llm.TextRewriter rewriter,
         UsageStore usage, Notes.Notetaker notetaker, Notes.Summarizer summarizer, Notes.VoiceLibrary voices,
-        MeetingController meetings, DictionaryFiles dictionaryFiles)
+        MeetingController meetings, DictionaryFiles dictionaryFiles, DictationHistory history)
     {
+        _history = history;
         SetUpDictionaryFiles(dictionaryFiles);
         SetUpSettingsFolder();
+        SetUpHistory();
         Styles = new StylesViewModel(settings, rewriter, Save);
         Insights = new InsightsViewModel(usage);
         Loaded = new LoadedModelsViewModel(settings, models, engines);
@@ -227,6 +230,51 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _settings.RemoveFillerWords;
         set { _settings.RemoveFillerWords = value; Save(); Raise(); }
+    }
+
+    // ---- The history on the Dictation page
+
+    public DictationHistory History => _history;
+
+    /// <summary>The switch in Settings. Turning it off forgets what was kept.</summary>
+    public bool KeepHistory
+    {
+        get => _settings.KeepHistory;
+        set
+        {
+            if (_settings.KeepHistory == value) return;
+            _settings.KeepHistory = value;
+            if (!value) _history.Clear();
+            Save();
+            Raise();
+            Raise(nameof(HistoryOff));
+            Raise(nameof(ShowHistoryEmpty));
+        }
+    }
+
+    public bool HistoryOff => !KeepHistory;
+    public bool HasHistory => _history.Entries.Count > 0;
+    public bool ShowHistoryEmpty => KeepHistory && !HasHistory;
+
+    public RelayCommand ClearHistory { get; private set; } = null!;
+    public RelayCommand RemoveHistoryEntry { get; private set; } = null!;
+    public RelayCommand CopyText { get; private set; } = null!;
+
+    void SetUpHistory()
+    {
+        _history.Entries.CollectionChanged += (_, _) =>
+        {
+            Raise(nameof(HasHistory));
+            Raise(nameof(ShowHistoryEmpty));
+        };
+        ClearHistory = new RelayCommand(_ => _history.Clear());
+        RemoveHistoryEntry = new RelayCommand(p => { if (p is DictationEntry entry) _history.Remove(entry); });
+        CopyText = new RelayCommand(p =>
+        {
+            if (p is not string { Length: > 0 } text) return;
+            try { System.Windows.Clipboard.SetText(text); }
+            catch (System.Runtime.InteropServices.COMException e) { Log.Warn($"Could not copy to the clipboard: {e.Message}"); }
+        });
     }
 
     public bool UseGpu

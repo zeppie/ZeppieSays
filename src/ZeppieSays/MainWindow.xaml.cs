@@ -31,6 +31,8 @@ public partial class MainWindow : Window
         Loaded += (_, _) => UpdateStrip();
     }
 
+    void OpenSettings_Click(object sender, RoutedEventArgs e) => Tabs.SelectedItem = SettingsTab;
+
     // ---- The strip of recordings: no scrollbar; drag it, use the arrows or the wheel, and a thin line shows where you are.
 
     readonly DispatcherTimer _stripGlide = new() { Interval = TimeSpan.FromMilliseconds(15) };

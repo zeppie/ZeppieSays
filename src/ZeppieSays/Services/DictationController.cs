@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using ZeppieSays.Core;
 using ZeppieSays.Engines;
 using ZeppieSays.Llm;
+using ZeppieSays.UI;
 
 namespace ZeppieSays.Services;
 
@@ -22,6 +23,7 @@ public sealed class DictationController : IDisposable
     readonly EngineCache _engines;
     readonly TextRewriter _rewriter;
     readonly UsageStore _usage;
+    readonly DictationHistory _history;
     readonly Dispatcher _ui;
 
     DictationState _state = DictationState.Idle;
@@ -42,13 +44,14 @@ public sealed class DictationController : IDisposable
     public string? LastUnedited { get; private set; }
 
     public DictationController(AppSettings settings, AudioRecorder recorder, EngineCache engines, TextRewriter rewriter,
-        UsageStore usage, KeyboardHook hook, Dispatcher ui)
+        UsageStore usage, DictationHistory history, KeyboardHook hook, Dispatcher ui)
     {
         _settings = settings;
         _recorder = recorder;
         _engines = engines;
         _rewriter = rewriter;
         _usage = usage;
+        _history = history;
         _ui = ui;
         // The hook callback has to return fast, so the real work is posted to the UI queue.
         hook.KeyDown += (i, time) => _ui.BeginInvoke(() => OnKeyDown(i, time));
@@ -171,6 +174,7 @@ public sealed class DictationController : IDisposable
             Log.Info($"{engine.Name} on {engine.Backend}: {seconds:F1}s audio (peak {_peak:F2}) in {watch.ElapsedMilliseconds} ms, " +
                      $"{raw.Length} chars raw, {text.Length} after cleanup, {context.Identifiers.Count} screen words");
             LastUnedited = text;
+            var spoken = text.Trim();
 
             var style = _rewriter.ResolveStyle(context, binding);
             Log.Info($"Into '{context.ProcessName}' \"{context.Title}\": style '{style.Name}'");
@@ -194,6 +198,8 @@ public sealed class DictationController : IDisposable
                 rewritten = result.Rewritten;
             }
             await TextInserter.InsertAsync(text);
+            _history.Add(new DictationEntry(DateTime.Now, text.Trim(), rewritten ? spoken : null, context.ProcessName,
+                !style.UsesLlm ? null : target is null ? style.Name : $"{style.Name} → {LanguageName(target)}"));
             // The text went in as spoken; say so, or it looks like the translation silently did nothing.
             if (notTranslated is not null)
                 Failed?.Invoke($"Not translated ({notTranslated}), so it was typed as spoken.");
