@@ -5,7 +5,7 @@ using ZeppieSays.Core;
 namespace ZeppieSays.Services;
 
 /// <summary>One dictionary text file and what reading it gave.</summary>
-public sealed record DictionaryFile(string StoredPath, string FullPath, int Words, string? Problem)
+public sealed record DictionaryFile(string StoredPath, string FullPath, int Words, string? Problem, bool IsDefault)
 {
     public string Name => Path.GetFileName(FullPath);
 }
@@ -31,6 +31,21 @@ public sealed class DictionaryFiles : IDisposable
     {
         _settings = settings;
         _ui = ui;
+        try
+        {
+            var hadOwnWords = settings.Dictionary.Count > 0;
+            var listed = settings.DictionaryFiles.FirstOrDefault()?.Equals(DefaultFileName, StringComparison.OrdinalIgnoreCase) == true;
+            EnsureDefault(settings, AppPaths.Settings);
+            if (hadOwnWords || !listed)
+            {
+                SettingsStore.Save(settings);
+                if (hadOwnWords) Log.Info($"Moved the dictionary words into {DefaultFileName}");
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Error($"Could not set up {DefaultFileName}", e);
+        }
         // Editors and OneDrive write a file in several steps; read it once things have settled.
         _debounce = new DispatcherTimer(DispatcherPriority.Background, ui) { Interval = TimeSpan.FromMilliseconds(500) };
         _debounce.Tick += (_, _) => { _debounce.Stop(); Reload(); };
@@ -64,6 +79,82 @@ public sealed class DictionaryFiles : IDisposable
         File.WriteAllLines(fullPath, lines);
     }
 
+    /// <summary>
+    /// Adds a word to a file, or replaces the line of the same word (any capitals). Comments and the other
+    /// lines stay exactly as they were, so the file stays the user's own text file.
+    /// </summary>
+    public static void AddWordTo(string fullPath, DictionaryEntry entry)
+    {
+        var lines = File.Exists(fullPath) ? File.ReadAllLines(fullPath).ToList() : [];
+        var at = lines.FindIndex(l => SameTerm(l, entry.Term));
+        if (at >= 0)
+        {
+            lines[at] = entry.ToString();
+            for (var i = lines.Count - 1; i > at; i--) // tidy duplicates further down
+                if (SameTerm(lines[i], entry.Term)) lines.RemoveAt(i);
+        }
+        else
+        {
+            // Keep a blank line after the comment header, then one word per line.
+            if (lines.Count > 0 && lines[^1].Trim().Length == 0 && lines.Count(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith('#')) > 0)
+                lines.RemoveAt(lines.Count - 1);
+            lines.Add(entry.ToString());
+        }
+        File.WriteAllLines(fullPath, lines);
+    }
+
+    /// <summary>Removes every line for this word; everything else in the file stays.</summary>
+    public static void RemoveWordFrom(string fullPath, string term)
+    {
+        var lines = File.ReadAllLines(fullPath).ToList();
+        if (lines.RemoveAll(l => SameTerm(l, term)) > 0) File.WriteAllLines(fullPath, lines);
+    }
+
+    static bool SameTerm(string line, string term) =>
+        DictionaryEntry.Parse(line)?.Term.Equals(term, StringComparison.OrdinalIgnoreCase) == true;
+
+    public const string DefaultFileName = "ZeppieSaysDictionary.txt";
+
+    const string DefaultHeader =
+        "Zeppie Says dictionary: one word per line.\n" +
+        "To fix a word the model keeps getting wrong: Betabit = beta bit, beta bid\n" +
+        "Lines starting with # are ignored. Edit it in Zeppie Says or in any text editor.";
+
+    /// <summary>
+    /// Makes sure the default dictionary file exists and is listed first. Words kept in settings.json by older
+    /// versions move into it (once), so there is one place for words: the files.
+    /// </summary>
+    public static void EnsureDefault(AppSettings settings, string folder)
+    {
+        var path = Path.Combine(folder, DefaultFileName);
+        if (!File.Exists(path)) Write(path, [], DefaultHeader);
+        foreach (var entry in settings.Dictionary)
+            if (!Read(path).Any(e => e.Term.Equals(entry.Term, StringComparison.OrdinalIgnoreCase)))
+                AddWordTo(path, entry);
+        settings.Dictionary.Clear();
+        settings.DictionaryFiles.RemoveAll(p => p.Equals(DefaultFileName, StringComparison.OrdinalIgnoreCase));
+        settings.DictionaryFiles.Insert(0, DefaultFileName); // relative: it lives in the settings folder
+    }
+
+    public void AddWord(DictionaryFile file, DictionaryEntry entry)
+    {
+        AddWordTo(file.FullPath, entry);
+        Reload();
+    }
+
+    public void RemoveWord(DictionaryFile file, string term)
+    {
+        RemoveWordFrom(file.FullPath, term);
+        Reload();
+    }
+
+    /// <summary>The words of one file, for editing; empty when it can't be read.</summary>
+    public static IReadOnlyList<DictionaryEntry> WordsOf(DictionaryFile file)
+    {
+        try { return Read(file.FullPath); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
+    }
+
     public void Add(string fullPath)
     {
         var stored = ToStored(fullPath);
@@ -76,6 +167,7 @@ public sealed class DictionaryFiles : IDisposable
 
     public void Remove(DictionaryFile file)
     {
+        if (file.IsDefault) return; // there is always one place for words
         _settings.DictionaryFiles.Remove(file.StoredPath);
         SettingsStore.Save(_settings);
         Reload();
@@ -88,17 +180,18 @@ public sealed class DictionaryFiles : IDisposable
         foreach (var stored in _settings.DictionaryFiles)
         {
             var full = ToFull(stored);
+            var isDefault = stored.Equals(DefaultFileName, StringComparison.OrdinalIgnoreCase);
             try
             {
                 var entries = Read(full);
                 words.AddRange(entries);
-                files.Add(new DictionaryFile(stored, full, entries.Count, null));
+                files.Add(new DictionaryFile(stored, full, entries.Count, null, isDefault));
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 // A file on a OneDrive that isn't synced yet, or a removed share: keep it listed, say why.
                 files.Add(new DictionaryFile(stored, full, 0, e is FileNotFoundException or DirectoryNotFoundException
-                    ? "File not found" : "Can't read this file right now"));
+                    ? "File not found" : "Can't read this file right now", isDefault));
                 Log.Warn($"Dictionary file {full}: {e.Message}");
             }
         }

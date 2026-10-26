@@ -100,6 +100,73 @@ public class SettingsTests
         Assert.Equal("I work at Betabit.", TextShaping.Clean("I work at beta bit.", settings, ScreenContext.Empty));
     }
 
+    static string TempFile(params string[] lines)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"zs-dict-{Guid.NewGuid():N}.txt");
+        File.WriteAllLines(path, lines);
+        return path;
+    }
+
+    [Fact]
+    public void Adding_a_word_keeps_the_rest_of_the_file()
+    {
+        var path = TempFile("# Team words", "# keep this comment", "", "Betabit", "DELA");
+        try
+        {
+            DictionaryFiles.AddWordTo(path, new DictionaryEntry { Term = "Zeppie" });
+            Assert.Equal(["# Team words", "# keep this comment", "", "Betabit", "DELA", "Zeppie"], File.ReadAllLines(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Adding_a_word_again_replaces_its_line_instead_of_duplicating_it()
+    {
+        var path = TempFile("# words", "betabit", "DELA", "Betabit = beta bid");
+        try
+        {
+            DictionaryFiles.AddWordTo(path, DictionaryEntry.Parse("Betabit = beta bit, beta bid")!);
+            Assert.Equal(["# words", "Betabit = beta bit, beta bid", "DELA"], File.ReadAllLines(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Removing_a_word_removes_only_its_lines()
+    {
+        var path = TempFile("# words", "Betabit = beta bit", "DELA", "# DELA in a comment stays");
+        try
+        {
+            DictionaryFiles.RemoveWordFrom(path, "betabit");
+            Assert.Equal(["# words", "DELA", "# DELA in a comment stays"], File.ReadAllLines(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Words_from_older_settings_move_into_the_default_file_once()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"zs-settings-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var settings = new AppSettings
+            {
+                Dictionary = [new DictionaryEntry { Term = "Mikki", SoundsLike = ["Micky"] }, new DictionaryEntry { Term = "DELA" }],
+                DictionaryFiles = [@"Z:\Team\words.txt"],
+            };
+            DictionaryFiles.EnsureDefault(settings, folder);
+            DictionaryFiles.EnsureDefault(settings, folder); // a second start changes nothing
+
+            var path = Path.Combine(folder, DictionaryFiles.DefaultFileName);
+            Assert.Equal(["Mikki", "DELA"], DictionaryFiles.Read(path).Select(w => w.Term));
+            Assert.Equal(["Micky"], DictionaryFiles.Read(path)[0].SoundsLike);
+            Assert.Empty(settings.Dictionary);
+            Assert.Equal([DictionaryFiles.DefaultFileName, @"Z:\Team\words.txt"], settings.DictionaryFiles);
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
     [Fact]
     public void Dictionary_files_in_the_settings_folder_are_stored_relative_to_it()
     {

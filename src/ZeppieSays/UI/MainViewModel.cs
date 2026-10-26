@@ -28,7 +28,6 @@ public sealed class MainViewModel : ObservableObject
         ModelCatalog.Languages.Where(l => l.Code != "auto").Select(l => new Choice(l.Code, l.Name))
             .Prepend(new Choice(KeyBinding.SameLanguage, "As spoken")).ToList();
     public ObservableCollection<ModelRowViewModel> Catalog { get; } = [];
-    public ObservableCollection<DictionaryEntry> Dictionary { get; } = [];
     public IReadOnlyList<Choice> Languages { get; } =
         ModelCatalog.Languages.Select(l => new Choice(l.Code, l.Name)).ToList();
     public IReadOnlyList<Choice> Microphones { get; }
@@ -79,15 +78,11 @@ public sealed class MainViewModel : ObservableObject
         });
         Microphones = AudioRecorder.Devices().Select((name, i) => new Choice(i.ToString(), name))
             .Prepend(new Choice("-1", "Windows default")).ToList();
-        foreach (var entry in settings.Dictionary) Dictionary.Add(entry);
-
         AddCustomModel = new RelayCommand(_ => PickCustomModel());
         RemoveWord = new RelayCommand(p =>
         {
-            if (p is not DictionaryEntry entry) return;
-            Dictionary.Remove(entry);
-            _settings.Dictionary.Remove(entry);
-            Save();
+            if (p is not DictionaryEntry entry || SelectedDictionaryFile is not { } file) return;
+            WriteToFile(() => _dictionaryFiles.RemoveWord(file, entry.Term));
         });
         OpenDataFolder = new RelayCommand(_ =>
             Process.Start(new ProcessStartInfo(AppPaths.Data) { UseShellExecute = true }));
@@ -196,20 +191,28 @@ public sealed class MainViewModel : ObservableObject
     }
     string _newWord = "";
 
-    /// <summary>"Betabit" or "Betabit = beta bit, beta bid".</summary>
+    /// <summary>"Betabit" or "Betabit = beta bit, beta bid", into the selected dictionary file.</summary>
     public void AddWord()
     {
-        if (DictionaryEntry.Parse(NewWord) is not { } entry) return;
-        var existing = _settings.Dictionary.FindIndex(d => d.Term.Equals(entry.Term, StringComparison.OrdinalIgnoreCase));
-        if (existing >= 0)
+        if (DictionaryEntry.Parse(NewWord) is not { } entry || SelectedDictionaryFile is not { } file) return;
+        if (WriteToFile(() => _dictionaryFiles.AddWord(file, entry))) NewWord = "";
+    }
+
+    /// <summary>Edits a dictionary file, saying so when it can't be written (read-only, or a share that's gone).</summary>
+    static bool WriteToFile(Action edit)
+    {
+        try
         {
-            Dictionary.Remove(_settings.Dictionary[existing]);
-            _settings.Dictionary.RemoveAt(existing);
+            edit();
+            return true;
         }
-        _settings.Dictionary.Insert(0, entry);
-        Dictionary.Insert(0, entry);
-        NewWord = "";
-        Save();
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not edit a dictionary file", e);
+            System.Windows.MessageBox.Show($"Could not change this dictionary file: {e.Message}", "Zeppie Says",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return false;
+        }
     }
 
     public bool UseScreenContext
@@ -257,19 +260,50 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand NewDictionaryFile { get; private set; } = null!;
     public RelayCommand RemoveDictionaryFile { get; private set; } = null!;
     public RelayCommand OpenDictionaryFile { get; private set; } = null!;
-    public RelayCommand SaveWordsAsFile { get; private set; } = null!;
+    DictionaryFiles _dictionaryFiles = null!;
 
     const string FileHeader =
         "Zeppie Says dictionary: one word per line.\n" +
         "To fix a word the model keeps getting wrong: Betabit = beta bit, beta bid\n" +
         "Lines starting with # are ignored. Changes are picked up as soon as the file is saved.";
 
+    /// <summary>The file whose words the left side shows and edits; the default file at first.</summary>
+    public DictionaryFile? SelectedDictionaryFile
+    {
+        get => _selectedDictionaryFile;
+        set
+        {
+            if (value is null || value == _selectedDictionaryFile) return; // the list briefly clears while it refreshes
+            _selectedDictionaryFile = value;
+            Raise();
+            ShowWords();
+        }
+    }
+    DictionaryFile? _selectedDictionaryFile;
+
+    /// <summary>The words of the selected file, newest (last line) first.</summary>
+    public ObservableCollection<DictionaryEntry> Dictionary { get; } = [];
+
+    void ShowWords()
+    {
+        Dictionary.Clear();
+        if (SelectedDictionaryFile is { } file)
+            foreach (var entry in DictionaryFiles.WordsOf(file).Reverse()) Dictionary.Add(entry);
+    }
+
     void SetUpDictionaryFiles(DictionaryFiles files)
     {
+        _dictionaryFiles = files;
         void Show()
         {
+            // Keep the same file selected across a reload (its record changes when its word count does).
+            var selected = _selectedDictionaryFile?.FullPath;
             DictionaryFileList.Clear();
             foreach (var file in files.Files) DictionaryFileList.Add(file);
+            _selectedDictionaryFile = DictionaryFileList.FirstOrDefault(f => f.FullPath.Equals(selected, StringComparison.OrdinalIgnoreCase))
+                                      ?? DictionaryFileList.FirstOrDefault();
+            Raise(nameof(SelectedDictionaryFile));
+            ShowWords();
             Raise(nameof(FileWordCount));
         }
         files.Changed += Show;
@@ -294,21 +328,14 @@ public sealed class MainViewModel : ObservableObject
             };
             if (dialog.ShowDialog() != true) return;
             if (!File.Exists(dialog.FileName)) DictionaryFiles.Write(dialog.FileName, [], FileHeader);
+            _selectedDictionaryFile = null;
             files.Add(dialog.FileName);
-            OpenFile(dialog.FileName);
+            // Open the new file on the left, ready for its first word.
+            SelectedDictionaryFile = DictionaryFileList.FirstOrDefault(f =>
+                f.FullPath.Equals(Path.GetFullPath(dialog.FileName), StringComparison.OrdinalIgnoreCase));
         });
         RemoveDictionaryFile = new RelayCommand(p => { if (p is DictionaryFile file) files.Remove(file); });
         OpenDictionaryFile = new RelayCommand(p => { if (p is DictionaryFile file) OpenFile(file.FullPath); });
-        SaveWordsAsFile = new RelayCommand(_ =>
-        {
-            var dialog = new SaveFileDialog
-            {
-                Title = "Save your words as a dictionary file", Filter = "Text files (*.txt)|*.txt", FileName = "My words.txt",
-                InitialDirectory = AppPaths.Settings,
-            };
-            if (dialog.ShowDialog() == true)
-                DictionaryFiles.Write(dialog.FileName, _settings.Dictionary, FileHeader);
-        });
     }
 
     /// <summary>How many words the dictionary files add, for the page's caption.</summary>

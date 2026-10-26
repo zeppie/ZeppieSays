@@ -684,19 +684,44 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <!-- Dictionary files: shared or synced word lists -->
-                    <Border Grid.Column="2" Grid.RowSpan="3" Style="{StaticResource Card}" VerticalAlignment="Top" Margin="0">
+                    <!-- Dictionary files: click one to edit its words on the left -->
+                    <Border Grid.Column="2" Grid.RowSpan="4" Style="{StaticResource Card}" VerticalAlignment="Top" Margin="0">
                         <StackPanel>
                             <TextBlock Text="Dictionary files" Style="{StaticResource SectionTitle}" />
                             <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,10"
-                                       Text="Text files with one word per line, for example a team list in a shared folder. Changes are picked up as soon as a file is saved." />
-                            <ItemsControl ItemsSource="{Binding DictionaryFileList}">
-                                <ItemsControl.ItemTemplate>
+                                       Text="Click a file to edit its words. They're plain text files, so you can also share one, for example a team list in a shared folder. Changes are picked up as soon as a file is saved." />
+                            <ListBox ItemsSource="{Binding DictionaryFileList}" SelectedItem="{Binding SelectedDictionaryFile}"
+                                     BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Cursor" Value="Hand" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Bd" CornerRadius="8" Padding="8,6" Margin="0,1" Background="Transparent">
+                                                        <ContentPresenter />
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                                        </Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
                                     <DataTemplate DataType="{x:Type services:DictionaryFile}">
-                                        <Grid Margin="0,0,0,8" ToolTip="{Binding FullPath}">
+                                        <Grid ToolTip="{Binding FullPath}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
@@ -716,35 +741,48 @@
                                                     </TextBlock.Text>
                                                 </TextBlock>
                                             </StackPanel>
-                                            <Button Grid.Column="2" Content="&#xE70F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                    Padding="8,4" Background="Transparent" BorderThickness="0" ToolTip="Open to edit"
-                                                    AutomationProperties.Name="{Binding Name, StringFormat='Open {0}'}"
-                                                    Command="{Binding DataContext.OpenDictionaryFile, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            <Button Grid.Column="2" Content="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                    Padding="8,4" Background="Transparent" BorderThickness="0" ToolTip="Open in your text editor"
+                                                    AutomationProperties.Name="{Binding Name, StringFormat='Open {0} in a text editor'}"
+                                                    Command="{Binding DataContext.OpenDictionaryFile, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                                     CommandParameter="{Binding}" />
                                             <Button Grid.Column="3" Content="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                    Padding="8,4" Background="Transparent" BorderThickness="0"
+                                                    Padding="8,4" BorderThickness="0"
                                                     ToolTip="Stop using this file (the file itself stays)"
                                                     AutomationProperties.Name="{Binding Name, StringFormat='Remove {0}'}"
-                                                    Command="{Binding DataContext.RemoveDictionaryFile, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding}" />
+                                                    Command="{Binding DataContext.RemoveDictionaryFile, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                    CommandParameter="{Binding}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                        <Setter Property="Background" Value="Transparent" />
+                                                        <Style.Triggers>
+                                                            <!-- The default file is always there: one place your words can go -->
+                                                            <DataTrigger Binding="{Binding IsDefault}" Value="True">
+                                                                <Setter Property="Visibility" Value="Hidden" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
                                         </Grid>
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <WrapPanel Margin="0,4,0,0">
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <WrapPanel Margin="0,8,0,0">
                                 <Button Content="Add file…" Command="{Binding AddDictionaryFile}" Margin="0,0,8,8" />
                                 <Button Content="New file…" Command="{Binding NewDictionaryFile}" Margin="0,0,8,8" />
                             </WrapPanel>
-                            <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,0">
-                                <Hyperlink Command="{Binding SaveWordsAsFile}">Save your own words as a file…</Hyperlink>
-                            </TextBlock>
                         </StackPanel>
                     </Border>
 
-                    <TextBox x:Name="WordBox" Text="{Binding NewWord, UpdateSourceTrigger=PropertyChanged}" KeyDown="WordBox_KeyDown" />
-                    <TextBlock Grid.Row="1" Style="{StaticResource Caption}" Margin="4,6,4,10"
+                    <!-- The words of the selected file -->
+                    <TextBlock Text="{Binding SelectedDictionaryFile.Name, FallbackValue='Dictionary'}" Style="{StaticResource SectionTitle}"
+                               Margin="2,0,0,10" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedDictionaryFile.FullPath}" />
+                    <TextBox Grid.Row="1" x:Name="WordBox" Text="{Binding NewWord, UpdateSourceTrigger=PropertyChanged}" KeyDown="WordBox_KeyDown"
+                             AutomationProperties.Name="New word" />
+                    <TextBlock Grid.Row="2" Style="{StaticResource Caption}" Margin="4,6,4,10"
                                Text="Type a word and press Enter. To fix a word that keeps coming out wrong, write it as  Betabit = beta bit, beta bid" />
-                    <ListBox Grid.Row="2" ItemsSource="{Binding Dictionary}" BorderThickness="0" Background="Transparent"
+                    <ListBox Grid.Row="3" ItemsSource="{Binding Dictionary}" BorderThickness="0" Background="Transparent"
                              HorizontalContentAlignment="Stretch">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type core:DictionaryEntry}">
@@ -767,7 +805,7 @@
                                         </ItemsControl>
                                     </StackPanel>
                                     <Button Grid.Column="1" Content="✕" Padding="8,2" Background="Transparent" BorderThickness="0"
-                                            ToolTip="Remove"
+                                            ToolTip="Remove" AutomationProperties.Name="{Binding Term, StringFormat='Remove {0}'}"
                                             Command="{Binding DataContext.RemoveWord, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                             CommandParameter="{Binding}" />
                                 </Grid>

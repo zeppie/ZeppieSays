@@ -16,7 +16,12 @@ Press a key anywhere, talk, and the text lands where your cursor is.
 - **A small pill** at the bottom of the screen shows the key, the waveform and the model while you talk.
   The finished text is inserted in one go when you stop.
 - **Dictionary.** Words you use a lot get the right spelling. `Betabit` alone works, and
-  `Betabit = beta bit, beta bid` also fixes spellings the model keeps getting wrong.
+  `Betabit = beta bit, beta bid` also fixes spellings the model keeps getting wrong. Words live in plain text
+  files, one per line: `ZeppieSaysDictionary.txt` in the settings folder, plus any others you add (say, a team
+  list in a shared folder). Click a file on the Dictionary page to edit its words there; edits made elsewhere
+  are picked up as soon as the file is saved.
+- **Settings folder.** Settings, dictionary, voices and stats can live in a folder you choose, such as OneDrive,
+  so they survive a reinstall and follow you to another PC. API keys always stay on the PC (`keys.json`).
 - **Screen context, on this PC.** When you start dictating, ZeppieSays reads the text around your cursor
   (Windows UI Automation) and the words visible in the active window (built-in Windows OCR). Code-like
   names such as `userId` or `Program.cs` are passed to Whisper as vocabulary, and in code editors
