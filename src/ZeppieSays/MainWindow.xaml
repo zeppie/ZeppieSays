@@ -1663,6 +1663,52 @@
                             </Grid>
                             </StackPanel>
                         </Border>
+                        <!-- Known speakers: voices named in transcripts -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Speakers" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,10" TextWrapping="Wrap"
+                                           Text="People whose voice Zeppie Says knows. Name a speaker under a transcript and later recordings label that voice for you. Only a voiceprint is kept, never audio." />
+                                <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,0"
+                                           Text="No one yet. Rename “Speaker 1” under a transcript on the Notetaker page to add someone."
+                                           Visibility="{Binding NoKnownVoices, Converter={StaticResource Visible}}" />
+                                <ItemsControl ItemsSource="{Binding KnownVoices}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type ui:KnownVoiceRow}">
+                                            <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="6"
+                                                    Padding="12,8" Margin="0,0,0,6">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="&#xE77B;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                                                               VerticalAlignment="Center" Margin="0,0,12,0" Opacity="0.7" />
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" />
+                                                    </StackPanel>
+                                                    <!-- The tooltip also explains a greyed-out button -->
+                                                    <Button Grid.Column="2" Content="{Binding PlayGlyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="8,5"
+                                                            VerticalAlignment="Center" Margin="0,0,4,0" IsEnabled="{Binding CanPlay}"
+                                                            ToolTip="{Binding PlayTip}" ToolTipService.ShowOnDisabled="True"
+                                                            AutomationProperties.Name="Listen to this voice"
+                                                            Command="{Binding DataContext.PlayVoice, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}" />
+                                                    <Button Grid.Column="3" Content="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="8,5"
+                                                            VerticalAlignment="Center" ToolTip="Forget this voice"
+                                                            AutomationProperties.Name="Forget this voice"
+                                                            Command="{Binding DataContext.ForgetVoice, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
                         <!-- Where the user's own data lives -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel>

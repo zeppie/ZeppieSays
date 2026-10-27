@@ -58,6 +58,19 @@ public sealed class VoiceLibrary
         get { lock (_lock) return _voices.Select(v => v.Name).Order().ToList(); }
     }
 
+    /// <summary>Everyone known, by name, with how many recordings their voice is learned from; fresh from disk.</summary>
+    public IReadOnlyList<(string Name, int Samples)> Voices
+    {
+        get
+        {
+            lock (_lock)
+            {
+                ReloadFromDisk();
+                return _voices.Select(v => (v.Name, v.Samples)).OrderBy(v => v.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            }
+        }
+    }
+
     /// <summary>A voiceprint from up to a minute of the given stretches of speech, or null when there's too little.</summary>
     public static float[]? Voiceprint(float[] samples, IEnumerable<(int Start, int End)> ranges)
     {

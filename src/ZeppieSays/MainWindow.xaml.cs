@@ -19,6 +19,8 @@ public partial class MainWindow : Window
         {
             if (e.Source != Tabs) return;
             if (Tabs.SelectedItem == StylesTab) model.Styles.Refresh();
+            if (Tabs.SelectedItem == SettingsTab) model.RefreshVoices();
+            else model.StopVoice();
             // The streak and heatmap move on at midnight, without a new dictation.
             if (Tabs.SelectedItem == HomeTab || Tabs.SelectedItem == InsightsTab) model.Insights.Refresh();
             UpdateLoadedModelsPolling();

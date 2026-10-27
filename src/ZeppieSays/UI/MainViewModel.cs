@@ -10,6 +10,34 @@ namespace ZeppieSays.UI;
 
 public sealed record Choice(string Value, string Label);
 
+/// <summary>A person in the voice library, as listed in Settings, with a few seconds of them to listen to.</summary>
+public sealed class KnownVoiceRow(string name, int samples, bool isYou) : ObservableObject
+{
+    public string Name { get; } = name;
+    public string Detail => (samples == 1 ? "Learned from 1 recording" : $"Learned from {samples} recordings") + (isYou ? " · you" : "");
+
+    /// <summary>Where to hear them; null while looking, or when no recording with them is left.</summary>
+    public Notes.VoiceSample? Sample
+    {
+        get => _sample;
+        set { if (Set(ref _sample, value)) { Raise(nameof(CanPlay)); Raise(nameof(PlayTip)); } }
+    }
+    Notes.VoiceSample? _sample;
+
+    public bool CanPlay => Sample is not null;
+    public string PlayTip => Sample is { } s ? $"Listen: {s.End - s.Start:F0} s from “{s.Recording}”" : "No recording with this voice in the Notetaker folder";
+
+    public bool IsPlaying
+    {
+        get => _isPlaying;
+        set { if (Set(ref _isPlaying, value)) Raise(nameof(PlayGlyph)); }
+    }
+    bool _isPlaying;
+
+    /// <summary>Segoe Fluent Icons: stop while playing, play otherwise.</summary>
+    public string PlayGlyph => IsPlaying ? "" : "";
+}
+
 public sealed class MainViewModel : ObservableObject
 {
     readonly AppSettings _settings;
@@ -17,6 +45,7 @@ public sealed class MainViewModel : ObservableObject
     readonly EngineCache _engines;
     readonly KeyboardHook _hook;
     readonly DictationHistory _history;
+    readonly Notes.VoiceLibrary _voices;
 
     public StylesViewModel Styles { get; }
     public InsightsViewModel Insights { get; }
@@ -45,6 +74,7 @@ public sealed class MainViewModel : ObservableObject
         MeetingController meetings, DictionaryFiles dictionaryFiles, DictationHistory history)
     {
         _history = history;
+        _voices = voices;
         SetUpDictionaryFiles(dictionaryFiles);
         SetUpSettingsFolder();
         SetUpHistory();
@@ -52,6 +82,7 @@ public sealed class MainViewModel : ObservableObject
         Insights = new InsightsViewModel(usage);
         Loaded = new LoadedModelsViewModel(settings, models, engines);
         Notetaker = new NotetakerViewModel(settings, notetaker, summarizer, voices, meetings, dictionaryFiles, Save);
+        SetUpVoices(); // after the Notetaker: its recordings are where voice samples come from
         _settings = settings;
         _models = models;
         _engines = engines;
@@ -275,6 +306,95 @@ public sealed class MainViewModel : ObservableObject
             try { System.Windows.Clipboard.SetText(text); }
             catch (System.Runtime.InteropServices.COMException e) { Log.Warn($"Could not copy to the clipboard: {e.Message}"); }
         });
+    }
+
+    // ---- Known speakers: the voices named in transcripts, which later recordings recognise.
+
+    public ObservableCollection<KnownVoiceRow> KnownVoices { get; } = [];
+    public bool NoKnownVoices => KnownVoices.Count == 0;
+    public RelayCommand ForgetVoice { get; private set; } = null!;
+    public RelayCommand PlayVoice { get; private set; } = null!;
+
+    readonly System.Windows.Media.MediaPlayer _voicePlayer = new();
+    readonly System.Windows.Threading.DispatcherTimer _voiceStop = new();
+    KnownVoiceRow? _playing;
+    int _voicesVersion;
+
+    void SetUpVoices()
+    {
+        KnownVoices.CollectionChanged += (_, _) => Raise(nameof(NoKnownVoices));
+        _voicePlayer.MediaOpened += (_, _) =>
+        {
+            if (_playing?.Sample is not { } sample) return;
+            _voicePlayer.Position = TimeSpan.FromSeconds(sample.Start);
+            _voicePlayer.Play();
+            _voiceStop.Interval = TimeSpan.FromSeconds(sample.End - sample.Start);
+            _voiceStop.Start();
+        };
+        _voicePlayer.MediaFailed += (_, e) =>
+        {
+            Log.Warn($"Could not play a voice sample: {e.ErrorException.Message}");
+            StopVoice();
+        };
+        _voiceStop.Tick += (_, _) => StopVoice();
+        PlayVoice = new RelayCommand(p =>
+        {
+            if (p is not KnownVoiceRow { Sample: { } sample } row) return;
+            var again = row == _playing;
+            StopVoice();
+            if (again) return; // the button is a stop button while it plays
+            if (Notetaker.Playback.IsPlaying) Notetaker.Playback.PlayPause();
+            _playing = row;
+            row.IsPlaying = true;
+            _voicePlayer.Open(new Uri(sample.AudioPath)); // plays from MediaOpened
+        });
+        ForgetVoice = new RelayCommand(p =>
+        {
+            if (p is not KnownVoiceRow row) return;
+            var answer = System.Windows.MessageBox.Show(
+                $"Forget {row.Name}'s voice? New recordings will show them as Speaker 1, 2, … again until you name them. " +
+                "Transcripts you already have keep the name.",
+                "Zeppie Says", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Question);
+            if (answer != System.Windows.MessageBoxResult.OK) return;
+            _voices.Forget(row.Name);
+            Log.Info("Forgot a voice");
+            RefreshVoices();
+        });
+        RefreshVoices();
+    }
+
+    /// <summary>Re-reads the list, which a recording or another PC (a shared settings folder) may have changed.</summary>
+    public async void RefreshVoices()
+    {
+        StopVoice();
+        var version = ++_voicesVersion;
+        KnownVoices.Clear();
+        foreach (var (name, samples) in _voices.Voices)
+            KnownVoices.Add(new KnownVoiceRow(name, samples, name.Equals(UserName.First, StringComparison.OrdinalIgnoreCase)));
+
+        // Something to listen to for each person, from the transcripts on the Notetaker page that still have their audio.
+        var recordings = Notetaker.Jobs.Where(j => j.TranscriptPath is not null).Select(j => (j.AudioPath, j.TranscriptPath!)).ToList();
+        var names = KnownVoices.Select(v => v.Name).ToList();
+        try
+        {
+            var found = await Task.Run(() => Notes.VoiceSample.Find(recordings, names));
+            if (version != _voicesVersion) return; // refreshed again meanwhile
+            foreach (var row in KnownVoices)
+                row.Sample = found.GetValueOrDefault(row.Name);
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"Could not look for voice samples: {e.Message}");
+        }
+    }
+
+    public void StopVoice()
+    {
+        _voiceStop.Stop();
+        _voicePlayer.Stop();
+        _voicePlayer.Close(); // lets go of the file, so the Notetaker can still move it
+        if (_playing is not null) _playing.IsPlaying = false;
+        _playing = null;
     }
 
     public bool UseGpu
