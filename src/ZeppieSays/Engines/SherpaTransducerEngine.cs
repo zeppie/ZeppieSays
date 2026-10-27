@@ -39,7 +39,10 @@ public sealed class SherpaTransducerEngine : ITranscriptionEngine
             ?? throw new FileNotFoundException($"No {part}*.onnx in {dir}");
     }
 
-    public async Task<string> TranscribeAsync(TranscriptionRequest request, CancellationToken ct)
+    public async Task<string> TranscribeAsync(TranscriptionRequest request, CancellationToken ct) =>
+        (await TranscribeWordsAsync(request, ct)).Text;
+
+    public async Task<(string Text, IReadOnlyList<TimedWord> Words)> TranscribeWordsAsync(TranscriptionRequest request, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try
@@ -49,7 +52,13 @@ public sealed class SherpaTransducerEngine : ITranscriptionEngine
                 using var stream = _recognizer.CreateStream();
                 stream.AcceptWaveform(Audio.SampleRate, request.Samples);
                 _recognizer.Decode(stream);
-                return stream.Result.Text.Trim();
+                var result = stream.Result;
+                // A token's timestamp is when it starts; it lasts until the next one does.
+                var seconds = request.Samples.Length / (double)Audio.SampleRate;
+                var tokens = result.Tokens.Select((t, i) => (t,
+                    (double)(i < result.Timestamps.Length ? result.Timestamps[i] : seconds),
+                    i + 1 < result.Timestamps.Length ? (double)result.Timestamps[i + 1] : seconds));
+                return (result.Text.Trim(), (IReadOnlyList<TimedWord>)TimedWords.FromTokens(tokens));
             }, ct);
         }
         finally

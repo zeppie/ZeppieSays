@@ -844,19 +844,45 @@
                                                 <Setter Property="Text" Value="Settings for this file only. Your general Notetaker settings are on the Settings page and stay as they are." />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Selected.IsRedo}" Value="True">
-                                                        <Setter Property="Text" Value="Transcribes this recording again with these settings, to find the speakers anew. The current transcript, with your corrections, is kept in the Done\Previous folder." />
+                                                        <Setter Property="Text" Value="Finds the speakers anew with these settings. The current transcript, with your corrections, is kept in the Done\Previous folder." />
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
 
+                                    <!-- Doing a finished transcript again: keep the words, or transcribe again -->
+                                    <StackPanel Margin="0,0,0,16" Visibility="{Binding Selected.IsRedo, Converter={StaticResource Visible}, FallbackValue=Collapsed}">
+                                        <RadioButton GroupName="RedoKind" IsChecked="{Binding Selected.Options.KeepText}"
+                                                     IsEnabled="{Binding Selected.Options.CanKeepText}"
+                                                     Content="Only find the speakers again: keeps the text, takes seconds" />
+                                        <TextBlock Style="{StaticResource Caption}" Margin="28,0,0,6" TextWrapping="Wrap"
+                                                   Visibility="{Binding Selected.Options.CanKeepText, Converter={StaticResource Visible}}"
+                                                   Text="The words already heard are handed out to the speakers found now, word by word." />
+                                        <TextBlock Margin="28,0,0,6" TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                                    <Setter Property="Text" Value="Not for this transcript: it was made before Zeppie Says kept when each word was said. Transcribe it again once, and from then on this works." />
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Selected.Options.CanKeepText}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <RadioButton GroupName="RedoKind" IsChecked="{Binding Selected.Options.TranscribeAgain}"
+                                                     Content="Transcribe again: also with another speech model or language, takes minutes" />
+                                    </StackPanel>
+
                                     <TextBlock Text="Title" Style="{StaticResource Caption}" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding Selected.Options.Title, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,14"
                                                Text="The heading of the transcript. Leave empty to use the file name." />
 
-                                    <Grid>
+                                    <!-- How it is transcribed; not used when only the speakers are found again -->
+                                    <Grid IsEnabled="{Binding Selected.Options.TranscribeAgain}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="140" />
@@ -878,7 +904,7 @@
 
                                     <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                                         <CheckBox Content="Label speakers" IsChecked="{Binding Selected.Options.LabelSpeakers}"
-                                                  VerticalAlignment="Center" Margin="0,0,16,0"
+                                                  VerticalAlignment="Center" Margin="0,0,16,0" IsEnabled="{Binding Selected.Options.TranscribeAgain}"
                                                   ToolTip="Speaker 1, Speaker 2 per paragraph. Downloads two small models (33 MB) the first time." />
                                         <ComboBox ItemsSource="{x:Static ui:NotetakerViewModel.SpeakerCounts}" DisplayMemberPath="Label"
                                                   SelectedValuePath="Value" SelectedValue="{Binding Selected.Options.SpeakersChoice}" MinWidth="104"
@@ -887,12 +913,20 @@
                                     </StackPanel>
                                     <Expander Header="Speaker detection (advanced)" Margin="0,10,0,0" IsEnabled="{Binding Selected.Options.LabelSpeakers}"
                                               IsExpanded="{Binding Selected.IsRedo, Mode=OneWay}">
-                                        <ContentControl Content="{Binding SelectedSpeakerDetection}" ContentTemplate="{StaticResource SpeakerDetectionPanel}"
-                                                        Margin="0,10,0,4" Focusable="False" />
+                                        <StackPanel Margin="0,10,0,4">
+                                            <TextBlock Text="Voice model" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                            <ComboBox ItemsSource="{x:Static ui:NotetakerViewModel.VoiceModels}" DisplayMemberPath="Label"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding Selected.Options.VoiceModel}"
+                                                      HorizontalAlignment="Left" MinWidth="260" Margin="0,0,0,14"
+                                                      ToolTip="Tells the voices in this file apart. People you named are learned for this model first, from earlier recordings, when it doesn't know them yet." />
+                                            <ContentControl Content="{Binding SelectedSpeakerDetection}" ContentTemplate="{StaticResource SpeakerDetectionPanel}"
+                                                            Focusable="False" />
+                                        </StackPanel>
                                     </Expander>
                                     <CheckBox Content="Summary and action items" IsChecked="{Binding Selected.Options.Summarize}" Margin="0,10,0,0"
                                               ToolTip="Written by your default style model (Styles page)" />
                                     <CheckBox Content="Dictionary hints" IsChecked="{Binding Selected.Options.UseDictionary}" Margin="0,10,0,0"
+                                              IsEnabled="{Binding Selected.Options.TranscribeAgain}"
                                               ToolTip="Gives your dictionary words to Whisper so names are spelled right" />
 
                                     <TextBlock Text="About this recording" Style="{StaticResource Caption}" Margin="0,18,0,4" />
@@ -1053,7 +1087,7 @@
                                                     ToolTip="Show in folder" AutomationProperties.Name="Show in folder" />
                                             <Button Content="&#xE72C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6" Margin="4,0,0,0"
                                                     Command="{Binding RedoJob}" CommandParameter="{Binding Selected}"
-                                                    ToolTip="Find the speakers again, with other settings. Transcribes the recording again; the current transcript is kept."
+                                                    ToolTip="Find the speakers again, with other settings: keeps the text when it can, or transcribes again. The current transcript is kept."
                                                     AutomationProperties.Name="Find the speakers again" />
                                         </StackPanel>
                                     </Grid>

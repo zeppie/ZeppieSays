@@ -22,6 +22,9 @@ public sealed class Transcript
 
     /// <summary>Each speaker's voiceprint by label, kept beside the transcript so speakers can be named later.</summary>
     public Dictionary<string, float[]> Voiceprints { get; } = [];
+    /// <summary>Every word heard, with its time, so the speakers can be worked out again without transcribing again.</summary>
+    public List<SpokenWord> Words { get; } = [];
+
     /// <summary>The voice model that made <see cref="Voiceprints"/>.</summary>
     public string VoiceModel { get; init; } = global::ZeppieSays.Notes.VoiceModel.DefaultId;
 

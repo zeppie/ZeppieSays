@@ -27,10 +27,49 @@ public sealed class NoteOptions : ObservableObject
         _summarize = settings.Summarize,
         _useDictionary = settings.UseDictionary,
         Speaker = settings.SpeakerDetection.Copy(),
+        _voiceModel = settings.VoiceModel,
     };
 
     /// <summary>Speaker detection's finer settings for this file.</summary>
     public SpeakerSettings Speaker { get; private init; } = new();
+
+    string _voiceModel = Notes.VoiceModel.DefaultId;
+    bool _keepText;
+    bool _canKeepText;
+
+    /// <summary>The voice model that tells this file's speakers apart (<see cref="Notes.VoiceModel"/>).</summary>
+    public string VoiceModel
+    {
+        get => _voiceModel;
+        set { if (value is not null) Set(ref _voiceModel, value); }
+    }
+
+    /// <summary>
+    /// Doing a finished transcript again: true only works out the speakers again and hands them the words already
+    /// heard (seconds); false transcribes the recording again (minutes).
+    /// </summary>
+    public bool KeepText
+    {
+        get => _keepText;
+        set { if (Set(ref _keepText, value && _canKeepText)) Raise(nameof(TranscribeAgain)); }
+    }
+
+    public bool TranscribeAgain
+    {
+        get => !_keepText;
+        set => KeepText = !value;
+    }
+
+    /// <summary>The transcript has its words with their times (made since they are kept), so the text can be kept.</summary>
+    public bool CanKeepText
+    {
+        get => _canKeepText;
+        set
+        {
+            if (!Set(ref _canKeepText, value)) return;
+            if (!value) KeepText = false;
+        }
+    }
 
     public string ModelId
     {

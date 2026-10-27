@@ -210,7 +210,6 @@ public sealed partial class NotetakerViewModel : ObservableObject
             Raise();
             Raise(nameof(VoiceModelNote));
             SpeakerDetection.RaiseThreshold();
-            SelectedSpeakerDetection?.RaiseThreshold();
             Log.Info($"Voice model is now {value}");
             _ = _notetaker.RelearnVoicesAsync();
         }
@@ -219,9 +218,18 @@ public sealed partial class NotetakerViewModel : ObservableObject
     public string VoiceModelNote => VoiceModel.Get(VoiceModelId).Note;
 
     /// <summary>The advanced speaker settings of the selected file, while it waits to start.</summary>
-    public SpeakerSettingsViewModel? SelectedSpeakerDetection =>
-        _selectedSpeakerDetection?.Settings == Selected?.Options?.Speaker ? _selectedSpeakerDetection
-        : _selectedSpeakerDetection = Selected?.Options is { } options ? new(options.Speaker, () => VoiceModel.Get(VoiceModelId)) : null;
+    public SpeakerSettingsViewModel? SelectedSpeakerDetection
+    {
+        get
+        {
+            if (_selectedSpeakerDetection?.Settings == Selected?.Options?.Speaker) return _selectedSpeakerDetection;
+            if (Selected?.Options is not { } options) return _selectedSpeakerDetection = null;
+            // The threshold's default follows the voice model picked for this file.
+            var panel = new SpeakerSettingsViewModel(options.Speaker, () => VoiceModel.Get(options.VoiceModel));
+            options.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(NoteOptions.VoiceModel)) panel.RaiseThreshold(); };
+            return _selectedSpeakerDetection = panel;
+        }
+    }
     SpeakerSettingsViewModel? _selectedSpeakerDetection;
 
     /// <summary>Puts the selected transcript back as Ready, to do it again with other speaker settings.</summary>

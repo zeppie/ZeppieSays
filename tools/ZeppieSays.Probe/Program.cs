@@ -145,6 +145,21 @@ switch (args.FirstOrDefault())
         break;
     }
 
+    case "words": // probe words <model-id> <language> <audio file> [from-seconds to-seconds]  — each word and when it was said
+    {
+        var audio = ZeppieSays.Notes.AudioFile.Load(args[3]);
+        if (args.Length > 5)
+            audio = audio[(int)(double.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture) * Audio.SampleRate)..
+                          (int)(double.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) * Audio.SampleRate)];
+        settings.UseGpu = true;
+        using var cache = new EngineCache(models, settings);
+        var engine = await cache.GetAsync(args[1]);
+        var (text, words) = await engine.TranscribeWordsAsync(new(audio, args[2], ""), CancellationToken.None);
+        Console.WriteLine(text);
+        foreach (var w in words) Console.WriteLine($"  {w.Start,6:F2}-{w.End,6:F2}  {w.Text}");
+        break;
+    }
+
     case "diarize-raw": // probe diarize-raw <audio file> <embedding .onnx> [threshold | nN ...]  — sherpa's own segments, before Zeppie's clean-up
     {
         var audio = ZeppieSays.Notes.AudioFile.Load(args[1]);

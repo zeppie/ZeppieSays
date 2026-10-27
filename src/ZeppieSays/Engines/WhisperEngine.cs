@@ -28,17 +28,23 @@ public sealed class WhisperEngine : ITranscriptionEngine
         Log.Info($"Whisper '{name}' loaded on {Backend}");
     }
 
-    public async Task<string> TranscribeAsync(TranscriptionRequest request, CancellationToken ct)
+    public async Task<string> TranscribeAsync(TranscriptionRequest request, CancellationToken ct) =>
+        (await TranscribeAsync(request, words: false, ct)).Text;
+
+    public async Task<(string Text, IReadOnlyList<TimedWord> Words)> TranscribeWordsAsync(TranscriptionRequest request, CancellationToken ct) =>
+        await TranscribeAsync(request, words: true, ct);
+
+    async Task<(string Text, IReadOnlyList<TimedWord> Words)> TranscribeAsync(TranscriptionRequest request, bool words, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try
         {
             var samples = Normalize(request.Samples);
-            var text = await RunAsync(samples, request.Language, request.Prompt, ct);
+            var result = await RunAsync(samples, request.Language, request.Prompt, words, ct);
             // Safety net: if the hints put Whisper off, it is better to lose the hints than the dictation.
-            if (text.Length == 0 && request.Prompt.Length > 0 && !ct.IsCancellationRequested)
-                text = await RunAsync(samples, request.Language, "", ct);
-            return text;
+            if (result.Text.Length == 0 && request.Prompt.Length > 0 && !ct.IsCancellationRequested)
+                result = await RunAsync(samples, request.Language, "", words, ct);
+            return result;
         }
         finally
         {
@@ -61,7 +67,8 @@ public sealed class WhisperEngine : ITranscriptionEngine
         return boosted;
     }
 
-    async Task<string> RunAsync(float[] samples, string language, string prompt, CancellationToken ct)
+    async Task<(string Text, IReadOnlyList<TimedWord> Words)> RunAsync(float[] samples, string language, string prompt, bool words,
+        CancellationToken ct)
     {
         var builder = _factory.CreateBuilder()
             .WithThreads(Math.Max(2, Environment.ProcessorCount / 2))
@@ -73,19 +80,26 @@ public sealed class WhisperEngine : ITranscriptionEngine
             : builder.WithLanguage(language);
         if (!string.IsNullOrWhiteSpace(prompt))
             builder = builder.WithPrompt(prompt);
+        if (words) builder = builder.WithTokenTimestamps();
 
         await using var processor = builder.Build();
         var text = new StringBuilder();
+        var tokens = new List<(string, double, double)>();
         var segments = new List<string>();
         await foreach (var segment in processor.ProcessAsync(samples, ct))
         {
             var dropped = segment.NoSpeechProbability > 0.8f;
             segments.Add($"{segment.Text.Length} chars, no-speech {segment.NoSpeechProbability:F2}{(dropped ? ", dropped" : "")}");
-            if (!dropped) text.Append(segment.Text);
+            if (dropped) continue;
+            text.Append(segment.Text);
+            // Token times are in hundredths of a second; [_BEG_] and the like are Whisper's own markers, not words.
+            if (words)
+                tokens.AddRange((segment.Tokens ?? []).Where(t => t.Text is { Length: > 0 } s && !s.StartsWith("[_") && !s.StartsWith("<|"))
+                    .Select(t => (t.Text!, t.Start / 100.0, t.End / 100.0)));
         }
         // Lengths and scores only: the dictated words themselves never go into the log.
         Log.Info($"Whisper segments [{string.Join("; ", segments)}], prompt {prompt.Length} chars");
-        return text.ToString().Trim();
+        return (text.ToString().Trim(), TimedWords.FromTokens(tokens));
     }
 
     public void Dispose()
