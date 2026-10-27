@@ -421,26 +421,33 @@ public sealed partial class NotetakerViewModel
     /// </summary>
     void TeachVoice(string name, double start, double end)
     {
-        if (GenericSpeaker().IsMatch(name) || Selected is not { } job || !File.Exists(job.AudioPath)) return;
-        var audio = job.AudioPath;
+        if (GenericSpeaker().IsMatch(name) || Selected is not { } job) return;
+        LearnFromAudio(VoiceModelId, name, job.AudioPath, [(start, end)]);
+    }
+
+    /// <summary>Learns a person's voice, in the background, from the given stretches (seconds) of a recording.</summary>
+    void LearnFromAudio(string model, string name, string? audio, IReadOnlyList<(double Start, double End)> stretches)
+    {
+        if (audio is null || !File.Exists(audio) || stretches.Count == 0) return;
         _ = Task.Run(() =>
         {
             try
             {
                 var samples = AudioFile.Load(audio);
-                var from = (int)Math.Clamp(start * Audio.SampleRate, 0, samples.Length);
-                var to = (int)Math.Clamp(end * Audio.SampleRate, 0, samples.Length);
-                if (VoiceLibrary.Voiceprint(samples, [(from, to)]) is not { } voice)
+                var ranges = stretches.Select(s => (
+                    (int)Math.Clamp(s.Start * Audio.SampleRate, 0, samples.Length),
+                    (int)Math.Clamp(s.End * Audio.SampleRate, 0, samples.Length))).Where(r => r.Item2 > r.Item1);
+                if (VoiceLibrary.Voiceprint(model, samples, ranges) is not { } voice)
                 {
-                    Log.Info($"Too little speech to learn {name}'s voice from the corrected paragraph");
+                    Log.Info($"Too little speech to learn {name}'s voice from");
                     return;
                 }
-                _voices.Remember(name, voice);
-                Log.Info($"Learned {name}'s voice from a corrected paragraph");
+                _voices.Remember(model, name, voice);
+                Log.Info($"Learned {name}'s voice from the recording");
             }
             catch (Exception e)
             {
-                Log.Warn($"Could not learn {name}'s voice from the correction: {e.Message}");
+                Log.Warn($"Could not learn {name}'s voice: {e.Message}");
             }
         });
     }

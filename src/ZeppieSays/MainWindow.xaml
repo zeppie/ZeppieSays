@@ -17,6 +17,66 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
         <ui:EmptyToVisibleConverter x:Key="EmptyToVisible" />
+        <!-- Advanced speaker detection: in Settings for every new file, and per file before it starts -->
+        <DataTemplate x:Key="SpeakerDetectionPanel" DataType="{x:Type ui:SpeakerSettingsViewModel}">
+            <StackPanel>
+                <TextBlock Text="Same-voice threshold" Style="{StaticResource Caption}" Margin="0,0,0,2" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="More speakers" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                    <Slider Grid.Column="1" Minimum="0.2" Maximum="0.95" SmallChange="0.01" LargeChange="0.05" TickFrequency="0.05"
+                            IsSnapToTickEnabled="True" Value="{Binding Threshold}" Margin="10,0" VerticalAlignment="Center"
+                            AutomationProperties.Name="Same-voice threshold" />
+                    <TextBlock Grid.Column="2" Text="Fewer speakers" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock Style="{StaticResource Caption}" Margin="0,2,0,0">
+                    <Run Text="{Binding ThresholdText, Mode=OneWay}" />
+                    <Hyperlink Command="{Binding ResetThreshold}"><Hyperlink.Style>
+                        <Style TargetType="Hyperlink">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCustomThreshold}" Value="False">
+                                    <Setter Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Hyperlink.Style><Run Text=" · back to default" /></Hyperlink>
+                </TextBlock>
+                <TextBlock Style="{StaticResource Caption}" Margin="0,2,0,12" TextWrapping="Wrap"
+                           Text="How different two voices must sound to count as two people. Two people on one microphone sound alike: move left. One person split into several: move right. Not used when you pick the number of people." />
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Minimum speech per speaker" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{x:Static ui:SpeakerSettingsViewModel.MinSpeechChoices}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding MinSpeech}"
+                                  ToolTip="A 'speaker' with less speech is taken to be a fragment (a laugh, a 'yes') of someone else and merged into them. Not used when you pick the number of people." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Shortest speech" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{x:Static ui:SpeakerSettingsViewModel.ShortestSpeechChoices}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding ShortestSpeech}" MinWidth="110"
+                                  ToolTip="Speech shorter than this is ignored by the detection. Lower catches short replies, but also more noise." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="4">
+                        <TextBlock Text="Shortest pause" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{x:Static ui:SpeakerSettingsViewModel.ShortestPauseChoices}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding ShortestPause}" MinWidth="110"
+                                  ToolTip="A silence shorter than this doesn't end someone's turn. Lower catches quick back-and-forth." />
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </DataTemplate>
         <!-- Tabs above the transcript -->
         <Style x:Key="Chip" TargetType="RadioButton">
             <Setter Property="Cursor" Value="Hand" />
@@ -778,8 +838,18 @@
                                 <StackPanel Margin="24,20,20,20">
                                     <TextBlock Text="{Binding Selected.Name}" Style="{StaticResource SectionTitle}" Margin="0,0,0,2"
                                                TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,16"
-                                               Text="Settings for this file only. Your general Notetaker settings are on the Settings page and stay as they are." />
+                                    <TextBlock Margin="0,0,0,16" TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                                <Setter Property="Text" Value="Settings for this file only. Your general Notetaker settings are on the Settings page and stay as they are." />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Selected.IsRedo}" Value="True">
+                                                        <Setter Property="Text" Value="Transcribes this recording again with these settings, to find the speakers anew. The current transcript, with your corrections, is kept in the Done\Previous folder." />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
 
                                     <TextBlock Text="Title" Style="{StaticResource Caption}" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding Selected.Options.Title, UpdateSourceTrigger=PropertyChanged}" />
@@ -815,6 +885,11 @@
                                                   IsEnabled="{Binding Selected.Options.LabelSpeakers}" VerticalAlignment="Center"
                                                   ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
                                     </StackPanel>
+                                    <Expander Header="Speaker detection (advanced)" Margin="0,10,0,0" IsEnabled="{Binding Selected.Options.LabelSpeakers}"
+                                              IsExpanded="{Binding Selected.IsRedo, Mode=OneWay}">
+                                        <ContentControl Content="{Binding SelectedSpeakerDetection}" ContentTemplate="{StaticResource SpeakerDetectionPanel}"
+                                                        Margin="0,10,0,4" Focusable="False" />
+                                    </Expander>
                                     <CheckBox Content="Summary and action items" IsChecked="{Binding Selected.Options.Summarize}" Margin="0,10,0,0"
                                               ToolTip="Written by your default style model (Styles page)" />
                                     <CheckBox Content="Dictionary hints" IsChecked="{Binding Selected.Options.UseDictionary}" Margin="0,10,0,0"
@@ -829,9 +904,20 @@
                                     <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
                                         <Button Content="Start" Command="{Binding StartJob}" CommandParameter="{Binding Selected}"
                                                 Style="{DynamicResource AccentButtonStyle}" MinWidth="96" />
-                                        <Button Content="Remove" Command="{Binding DiscardJob}" CommandParameter="{Binding Selected}"
-                                                Margin="8,0,0,0" MinWidth="84"
-                                                ToolTip="Takes the file off the list. A copy made in the Notetaker folder is deleted; your original stays." />
+                                        <Button Command="{Binding DiscardJob}" CommandParameter="{Binding Selected}" Margin="8,0,0,0" MinWidth="84">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Content" Value="Remove" />
+                                                    <Setter Property="ToolTip" Value="Takes the file off the list. A copy made in the Notetaker folder is deleted; your original stays." />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Selected.IsRedo}" Value="True">
+                                                            <Setter Property="Content" Value="Cancel" />
+                                                            <Setter Property="ToolTip" Value="Keeps the transcript as it is" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
                                         <Button Content="Start all" Command="{Binding StartAll}" Margin="8,0,0,0"
                                                 Visibility="{Binding HasSeveralReady, Converter={StaticResource Visible}}"
                                                 ToolTip="Starts every waiting file, each with its own settings" />
@@ -965,6 +1051,10 @@
                                             <Button Content="&#xE838;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6" Margin="4,0,0,0"
                                                     Command="{Binding ShowInFolder}" CommandParameter="{Binding Selected}"
                                                     ToolTip="Show in folder" AutomationProperties.Name="Show in folder" />
+                                            <Button Content="&#xE72C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6" Margin="4,0,0,0"
+                                                    Command="{Binding RedoJob}" CommandParameter="{Binding Selected}"
+                                                    ToolTip="Find the speakers again, with other settings. Transcribes the recording again; the current transcript is kept."
+                                                    AutomationProperties.Name="Find the speakers again" />
                                         </StackPanel>
                                     </Grid>
 
@@ -1661,6 +1751,19 @@
                                     </WrapPanel>
                                 </StackPanel>
                             </Grid>
+                            <Expander Header="Speaker detection (advanced)" Margin="0,16,0,0">
+                                <StackPanel Margin="0,12,0,4" MaxWidth="720" HorizontalAlignment="Left">
+                                    <TextBlock Text="Voice model" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                    <ComboBox ItemsSource="{x:Static ui:NotetakerViewModel.VoiceModels}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" SelectedValue="{Binding VoiceModelChoice}" HorizontalAlignment="Left" MinWidth="260" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap" Text="{Binding VoiceModelNote}" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="2,2,0,16" TextWrapping="Wrap"
+                                               Text="Tells voices apart and recognises the people you named. After a switch, named voices are learned again from transcripts that still have their audio; the first file with a new model downloads it (about 30 MB)." />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,10" TextWrapping="Wrap"
+                                               Text="Every new file starts with these settings; change them per file before it starts, or afterwards with “Find the speakers again” above a transcript." />
+                                    <ContentControl Content="{Binding SpeakerDetection}" ContentTemplate="{StaticResource SpeakerDetectionPanel}" Focusable="False" />
+                                </StackPanel>
+                            </Expander>
                             </StackPanel>
                         </Border>
                         <!-- Known speakers: voices named in transcripts -->

@@ -36,10 +36,15 @@ public sealed record VoiceSample(string AudioPath, double Start, double End)
     }
 
     /// <summary>The longest stretch in which <paramref name="speaker"/> talks alone, or null when none is long enough.</summary>
-    public static (double Start, double End)? Longest(IReadOnlyList<SpeakerSegment> segments, string speaker)
+    public static (double Start, double End)? Longest(IReadOnlyList<SpeakerSegment> segments, string speaker) =>
+        Alone(segments, speaker).Where(p => p.End - p.Start >= MinSeconds)
+            .Select(p => ((double Start, double End)?)p).MaxBy(p => p!.Value.End - p.Value.Start);
+
+    /// <summary>Every stretch in which <paramref name="speaker"/> talks and nobody else does, longest first.</summary>
+    public static List<(double Start, double End)> Alone(IReadOnlyList<SpeakerSegment> segments, string speaker)
     {
         var others = segments.Where(s => !s.Speaker.Equals(speaker, StringComparison.OrdinalIgnoreCase)).ToList();
-        (double Start, double End)? longest = null;
+        var alone = new List<(double Start, double End)>();
         foreach (var segment in segments.Where(s => s.Speaker.Equals(speaker, StringComparison.OrdinalIgnoreCase)))
         {
             // Cut out every moment someone else talks over them; what is left are the clean pieces.
@@ -48,10 +53,8 @@ public sealed record VoiceSample(string AudioPath, double Start, double End)
                 pieces = pieces.SelectMany(p => other.End <= p.Start || other.Start >= p.End
                     ? [p]
                     : new[] { (p.Start, other.Start), (other.End, p.End) }.Where(q => q.Item2 > q.Item1)).ToList();
-            foreach (var piece in pieces)
-                if (piece.End - piece.Start >= MinSeconds && (longest is null || piece.End - piece.Start > longest.Value.End - longest.Value.Start))
-                    longest = piece;
+            alone.AddRange(pieces);
         }
-        return longest;
+        return [.. alone.OrderByDescending(p => p.End - p.Start)];
     }
 }

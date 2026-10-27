@@ -34,6 +34,10 @@ public sealed class NoteJob(string audioPath) : ObservableObject
     string? _transcriptPath;
 
     public DateTime When { get; set; } = DateTime.Now;
+
+    /// <summary>A finished transcript waiting to be done again with other (speaker) settings; see <see cref="Notetaker.Redo"/>.</summary>
+    public bool IsRedo { get => _isRedo; set => Set(ref _isRedo, value); }
+    bool _isRedo;
     public bool IsWorking => Status == NoteStatus.Working;
     public bool IsDone => Status == NoteStatus.Done;
     public bool IsFailed => Status == NoteStatus.Failed;
@@ -163,10 +167,36 @@ public sealed class Notetaker : IDisposable
         foreach (var job in Jobs.Where(j => j.IsReady).Reverse().ToList()) Start(job);
     }
 
+    /// <summary>
+    /// Puts a finished transcript back as Ready, with the current general settings, so its speakers can be worked
+    /// out again with other settings. Speaker turns decide where the text is cut, so the whole recording is
+    /// transcribed again; the current transcript is kept in Done\Previous first.
+    /// </summary>
+    public void Redo(NoteJob job, string title)
+    {
+        if (!job.IsDone || job.TranscriptPath is null || !File.Exists(job.AudioPath)) return;
+        var options = NoteOptions.From(Options);
+        options.Title = title;
+        options.LabelSpeakers = true;
+        job.Options = options;
+        job.IsRedo = true;
+        job.Status = NoteStatus.Ready;
+        job.StatusText = "Do again · adjust its settings, then start";
+    }
+
     /// <summary>Takes a file that hasn't started off the list. A copy we made in the folder goes too; the original is never touched.</summary>
     public void Discard(NoteJob job)
     {
         if (!job.IsReady) return;
+        if (job.IsRedo)
+        {
+            // Not doing it again after all: the transcript is as it was.
+            job.IsRedo = false;
+            job.Options = null;
+            job.Status = NoteStatus.Done;
+            job.StatusText = "Done";
+            return;
+        }
         Jobs.Remove(job);
         var path = Path.GetFullPath(job.AudioPath);
         if (!_copied.Remove(path)) return;
@@ -214,8 +244,11 @@ public sealed class Notetaker : IDisposable
         var ct = _stop.Token;
         try
         {
-            Report("Waiting for the file to finish copying");
-            await WaitUntilReadyAsync(job.AudioPath, ct);
+            if (!job.IsRedo) // a finished recording is complete, and the player may have it open
+            {
+                Report("Waiting for the file to finish copying");
+                await WaitUntilReadyAsync(job.AudioPath, ct);
+            }
 
             var options = job.Options ?? NoteOptions.From(Options);
             var model = _models.Find(options.ModelId)
@@ -227,7 +260,13 @@ public sealed class Notetaker : IDisposable
             var duration = TimeSpan.FromSeconds(tracks[0].Length / (double)Audio.SampleRate);
             Log.Info($"Notetaker: {Path.GetFileName(job.AudioPath)}, {duration.TotalMinutes:F1} min{(recording is null ? "" : ", meeting recording")}");
 
-            var transcript = new Transcript { Title = options.Title.Trim() is { Length: > 0 } title ? title : job.Name, Duration = duration, ModelName = model.Info.Name };
+            var transcript = new Transcript
+            {
+                Title = options.Title.Trim() is { Length: > 0 } title ? title : job.Name,
+                Duration = duration,
+                ModelName = model.Info.Name,
+                VoiceModel = VoiceModelId,
+            };
             var turns = recording is null
                 ? await FileTurnsAsync(tracks[0], options, transcript, Report, ct)
                 : await MeetingTurnsAsync(tracks[0], tracks[1], options, transcript, Report, ct);
@@ -253,14 +292,21 @@ public sealed class Notetaker : IDisposable
                 }
             }
 
-            var (audio, markdown) = await Task.Run(() => Save(job.AudioPath, transcript), ct);
+            var (audio, markdown) = job is { IsRedo: true, TranscriptPath: { } previous }
+                ? await Task.Run(() => SaveAgain(job.AudioPath, previous, transcript), ct)
+                : await Task.Run(() => Save(job.AudioPath, transcript), ct);
             _ui.Invoke(() =>
             {
                 job.AudioPath = audio;
-                job.TranscriptPath = markdown;
+                job.IsRedo = false;
+                job.Options = null;
                 job.When = DateTime.Now;
                 job.Status = NoteStatus.Done;
                 job.StatusText = $"Done · {Transcript.Length(duration)}";
+                // Done first, so the page loads the transcript when the path arrives; after doing it again the path
+                // is the same, so it is cleared first to still be a change.
+                job.TranscriptPath = null;
+                job.TranscriptPath = markdown;
             });
             Log.Info($"Notetaker: wrote {Path.GetFileName(markdown)}, {transcript.Paragraphs.Count} paragraphs, {transcript.Speakers} speakers");
         }
@@ -270,6 +316,15 @@ public sealed class Notetaker : IDisposable
             Log.Error($"Notetaker failed on {job.AudioPath}", e);
             _ui.Invoke(() =>
             {
+                if (job.IsRedo)
+                {
+                    // Nothing was written yet: the transcript is still there as it was.
+                    job.IsRedo = false;
+                    job.Options = null;
+                    job.Status = NoteStatus.Done;
+                    job.StatusText = "Done · doing it again failed, see the log";
+                    return;
+                }
                 job.Status = NoteStatus.Failed;
                 job.StatusText = e is InvalidOperationException ? e.Message : "Could not transcribe this file. See the log for details.";
             });
@@ -283,7 +338,7 @@ public sealed class Notetaker : IDisposable
     async Task<List<Turn>> FileTurnsAsync(float[] samples, NoteOptions options, Transcript transcript, Action<string, double> report,
         CancellationToken ct)
     {
-        if (options.LabelSpeakers && await FindSpeakersAsync(samples, options.SpeakerCount, report, ct) is { } speakers)
+        if (options.LabelSpeakers && await FindSpeakersAsync(samples, options.SpeakerCount, options.Speaker, report, ct) is { } speakers)
             return await NameSpeakersAsync(samples, speakers, transcript, report, ct);
         return [new Turn(samples, 0, samples.Length, null)];
     }
@@ -301,7 +356,7 @@ public sealed class Notetaker : IDisposable
 
         // The people-count setting includes the user, who is on the other track.
         var others = options.SpeakerCount > 1 ? options.SpeakerCount - 1 : 0;
-        if (options.LabelSpeakers && await FindSpeakersAsync(call, others, report, ct) is { } speakers)
+        if (options.LabelSpeakers && await FindSpeakersAsync(call, others, options.Speaker, report, ct) is { } speakers)
             turns.AddRange(await NameSpeakersAsync(call, speakers, transcript, report, ct));
         else
             turns.AddRange(AudioFile.SpeechRegions(call).Select(r => new Turn(call, r.Start, r.End, "Others")));
@@ -309,26 +364,81 @@ public sealed class Notetaker : IDisposable
         // The user's own voice, learned from every meeting with enough of it, so they are recognised in ordinary
         // recordings too. A few words make a poor voiceprint that would weigh on the average for a long time.
         var spoken = mine.Sum(r => r.End - r.Start) / (double)Audio.SampleRate;
-        if (me != "You" && spoken >= 20 && await Task.Run(() => VoiceLibrary.Voiceprint(mic, mine), ct) is { } voice)
+        if (me != "You" && spoken >= 20 && await Task.Run(() => VoiceLibrary.Voiceprint(VoiceModelId, mic, mine), ct) is { } voice)
         {
-            _voices.Remember(me, voice);
+            _voices.Remember(VoiceModelId, me, voice);
             transcript.Voiceprints[me] = voice;
         }
         return [.. turns.OrderBy(t => t.Start)];
     }
 
-    async Task<IReadOnlyList<SpeakerTurn>?> FindSpeakersAsync(float[] samples, int count, Action<string, double> report, CancellationToken ct)
+    /// <summary>The voice model chosen in Settings.</summary>
+    string VoiceModelId => VoiceModel.Get(Options.VoiceModel).Id;
+
+    /// <summary>
+    /// After a switch of voice model, the people named so far are known only to the old one. This learns their
+    /// voices again with the new model from finished transcripts that still have their audio: wherever the timeline
+    /// shows them talking alone. People with no such recording left wait until they are named again.
+    /// </summary>
+    public async Task RelearnVoicesAsync()
+    {
+        var model = VoiceModelId;
+        var recordings = await _ui.InvokeAsync(() => Jobs
+            .Where(j => j.IsDone && j.TranscriptPath is not null && File.Exists(j.AudioPath))
+            .Select(j => (Audio: j.AudioPath, Markdown: j.TranscriptPath!)).ToList());
+        await Task.Run(async () =>
+        {
+            try
+            {
+                var names = _voices.Unlearned(model);
+                if (names.Count == 0) return;
+                var withThem = recordings.Select(r => (r.Audio, Timeline: Timeline.Load(r.Markdown)))
+                    .Where(r => r.Timeline?.Segments.Any(s => names.Contains(s.Speaker, StringComparer.OrdinalIgnoreCase)) == true)
+                    .ToList();
+                if (withThem.Count == 0) return;
+                await SpeakerDiarizer.EnsureInstalledAsync(model, new Progress<double>(), _stop.Token);
+
+                var learned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (audio, timeline) in withThem)
+                {
+                    var samples = AudioFile.Load(audio); // a meeting's two tracks mixed: each person is on one of them
+                    foreach (var name in names)
+                    {
+                        var ranges = VoiceSample.Alone(timeline!.Segments, name)
+                            .Select(p => ((int)(p.Start * Audio.SampleRate), Math.Min(samples.Length, (int)(p.End * Audio.SampleRate))))
+                            .Where(r => r.Item2 > r.Item1);
+                        if (VoiceLibrary.Voiceprint(model, samples, ranges) is not { } voice) continue;
+                        _voices.Remember(model, name, voice);
+                        learned.Add(name);
+                    }
+                }
+                Log.Info($"Voice model {model}: learned {learned.Count} of {names.Count} named voices again from earlier recordings");
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                Log.Warn($"Could not learn the named voices again: {e.Message}");
+            }
+        });
+        VoicesRelearned?.Invoke();
+    }
+
+    /// <summary>Raised on the UI thread when <see cref="RelearnVoicesAsync"/> is done, so the Speakers list can update.</summary>
+    public event Action? VoicesRelearned;
+
+    async Task<IReadOnlyList<SpeakerTurn>?> FindSpeakersAsync(float[] samples, int count, SpeakerSettings settings,
+        Action<string, double> report, CancellationToken ct)
     {
         try
         {
-            if (!SpeakerDiarizer.IsInstalled)
+            var model = VoiceModelId;
+            if (!SpeakerDiarizer.IsInstalled(model))
             {
                 report("Downloading speaker models", 0);
-                await SpeakerDiarizer.EnsureInstalledAsync(new Progress<double>(p => report("Downloading speaker models", p)), ct);
+                await SpeakerDiarizer.EnsureInstalledAsync(model, new Progress<double>(p => report("Downloading speaker models", p)), ct);
             }
             report("Finding speakers", 0);
             var turns = await Task.Run(() =>
-                SpeakerDiarizer.Run(samples, new Progress<double>(p => report("Finding speakers", p)), count), ct);
+                SpeakerDiarizer.Run(samples, new Progress<double>(p => report("Finding speakers", p)), model, settings, count), ct);
             return turns.Count > 0 ? turns : null;
         }
         catch (Exception e) when (e is not OperationCanceledException)
@@ -346,11 +456,12 @@ public sealed class Notetaker : IDisposable
         Action<string, double> report, CancellationToken ct)
     {
         report("Recognising voices", -1);
+        var model = transcript.VoiceModel;
         var voiceprints = await Task.Run(() => speakers.GroupBy(t => t.Speaker)
-            .Select(g => (Speaker: g.Key, Voice: VoiceLibrary.Voiceprint(samples, g.Select(t => (t.Start, t.End)))))
+            .Select(g => (Speaker: g.Key, Voice: VoiceLibrary.Voiceprint(model, samples, g.Select(t => (t.Start, t.End)))))
             .Where(v => v.Voice is not null)
             .ToDictionary(v => v.Speaker, v => v.Voice!), ct);
-        var known = _voices.Recognize(voiceprints);
+        var known = _voices.Recognize(model, voiceprints);
 
         var labels = new Dictionary<int, string>();
         var unknown = 0;
@@ -418,6 +529,28 @@ public sealed class Notetaker : IDisposable
         if (File.Exists(RecordingInfo.PathFor(audioPath)))
             File.Move(RecordingInfo.PathFor(audioPath), RecordingInfo.PathFor(audio));
         return (audio, markdown);
+    }
+
+    /// <summary>Where a transcript that was done again keeps its earlier version (with the user's corrections).</summary>
+    public string PreviousDirectory => Path.Combine(DoneDirectory, "Previous");
+
+    /// <summary>
+    /// Writes a transcript that was done again over the old one, after moving the old transcript and the files
+    /// beside it (voiceprints, timeline, corrections) to Done\Previous\name date\. The audio stays where it is.
+    /// </summary>
+    (string Audio, string Markdown) SaveAgain(string audioPath, string markdown, Transcript transcript)
+    {
+        var stem = Path.GetFileNameWithoutExtension(markdown);
+        var backup = Path.Combine(PreviousDirectory, $"{stem} {DateTime.Now:yyyy-MM-dd HH.mm.ss}");
+        Directory.CreateDirectory(backup);
+        foreach (var file in new[] { markdown, Path.ChangeExtension(markdown, ".speakers.json"), Timeline.PathFor(markdown), CorrectionLog.PathFor(markdown) })
+            if (File.Exists(file)) File.Move(file, Path.Combine(backup, Path.GetFileName(file)));
+        Log.Info($"Notetaker: kept the previous {Path.GetFileName(markdown)} in {backup}");
+
+        File.WriteAllText(markdown, transcript.ToMarkdown());
+        if (transcript.Voiceprints.Count > 0) transcript.SaveVoiceprints(markdown);
+        transcript.Timeline?.Save(markdown);
+        return (audioPath, markdown);
     }
 
     /// <summary>A file that is still being copied or recorded can't be opened exclusively; wait until it can.</summary>

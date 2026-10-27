@@ -81,6 +81,16 @@ public sealed partial class NotetakerViewModel : ObservableObject
 
         SetUpEditing();
 
+        SpeakerDetection = new SpeakerSettingsViewModel(Options.SpeakerDetection, () => VoiceModel.Get(VoiceModelId));
+        Options.SpeakerDetection.PropertyChanged += (_, _) => _save();
+        RedoJob = new RelayCommand(p =>
+        {
+            if (p is not NoteJob { IsDone: true } job) return;
+            Playback.Close(); // the recording is read again
+            _notetaker.Redo(job, _title is { Length: > 0 } title ? title : job.Name);
+            Raise(nameof(SelectedSpeakerDetection));
+        });
+
         Playback.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(Playback.Position)) UpdateCurrentLine();
@@ -181,6 +191,42 @@ public sealed partial class NotetakerViewModel : ObservableObject
         set { Options.UseDictionary = value; _save(); Raise(); }
     }
 
+    /// <summary>The advanced speaker detection settings every new file starts with.</summary>
+    public SpeakerSettingsViewModel SpeakerDetection { get; }
+
+    public static IReadOnlyList<Choice> VoiceModels { get; } = VoiceModel.All.Select(m => new Choice(m.Id, m.Name)).ToList();
+
+    string VoiceModelId => VoiceModel.Get(Options.VoiceModel).Id;
+
+    /// <summary>The voice model; switching learns the named voices again with the new one, from earlier recordings.</summary>
+    public string VoiceModelChoice
+    {
+        get => VoiceModelId;
+        set
+        {
+            if (value is null || value == VoiceModelId) return;
+            Options.VoiceModel = value;
+            _save();
+            Raise();
+            Raise(nameof(VoiceModelNote));
+            SpeakerDetection.RaiseThreshold();
+            SelectedSpeakerDetection?.RaiseThreshold();
+            Log.Info($"Voice model is now {value}");
+            _ = _notetaker.RelearnVoicesAsync();
+        }
+    }
+
+    public string VoiceModelNote => VoiceModel.Get(VoiceModelId).Note;
+
+    /// <summary>The advanced speaker settings of the selected file, while it waits to start.</summary>
+    public SpeakerSettingsViewModel? SelectedSpeakerDetection =>
+        _selectedSpeakerDetection?.Settings == Selected?.Options?.Speaker ? _selectedSpeakerDetection
+        : _selectedSpeakerDetection = Selected?.Options is { } options ? new(options.Speaker, () => VoiceModel.Get(VoiceModelId)) : null;
+    SpeakerSettingsViewModel? _selectedSpeakerDetection;
+
+    /// <summary>Puts the selected transcript back as Ready, to do it again with other speaker settings.</summary>
+    public RelayCommand RedoJob { get; private set; } = null!;
+
     // ---- The selected recording.
 
     public NoteJob? Selected
@@ -191,6 +237,7 @@ public sealed partial class NotetakerViewModel : ObservableObject
             if (!Set(ref _selected, value)) return;
             LoadSelected();
             RaisePlaceholder();
+            Raise(nameof(SelectedSpeakerDetection));
         }
     }
     NoteJob? _selected;
@@ -435,8 +482,13 @@ public sealed partial class NotetakerViewModel : ObservableObject
         if (name.Length == 0 || name == label) return;
         try
         {
-            if (Transcript.LoadVoiceprints(markdown).TryGetValue(label, out var voice))
-                _voices.Remember(name, voice);
+            var model = VoiceModelId;
+            var (madeBy, voiceprints) = Transcript.ReadVoiceprints(markdown);
+            if (madeBy == model && voiceprints.TryGetValue(label, out var voice))
+                _voices.Remember(model, name, voice);
+            else
+                LearnFromAudio(model, name, Selected?.AudioPath, _timeline?.Segments
+                    .Where(s => s.Speaker == label).Select(s => (s.Start, s.End)).ToList() ?? []);
             Transcript.RenameSpeaker(markdown, label, name);
             Log.Info($"Named a speaker in {Path.GetFileName(markdown)}");
         }
@@ -448,7 +500,11 @@ public sealed partial class NotetakerViewModel : ObservableObject
         System.Windows.Application.Current.Dispatcher.BeginInvoke(LoadTranscript);
     }
 
-    public void Start() => _notetaker.Watch();
+    public void Start()
+    {
+        _notetaker.Watch();
+        _ = _notetaker.RelearnVoicesAsync(); // voices named while another voice model was chosen
+    }
 
     public void AddFiles(IEnumerable<string> paths) => _notetaker.AddFiles(paths);
 

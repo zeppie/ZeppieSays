@@ -11,10 +11,12 @@ namespace ZeppieSays.UI;
 public sealed record Choice(string Value, string Label);
 
 /// <summary>A person in the voice library, as listed in Settings, with a few seconds of them to listen to.</summary>
-public sealed class KnownVoiceRow(string name, int samples, bool isYou) : ObservableObject
+/// <param name="unlearnedBy">The voice model that doesn't know this voice yet, or null when it does.</param>
+public sealed class KnownVoiceRow(string name, int samples, bool isYou, string? unlearnedBy = null) : ObservableObject
 {
     public string Name { get; } = name;
-    public string Detail => (samples == 1 ? "Learned from 1 recording" : $"Learned from {samples} recordings") + (isYou ? " · you" : "");
+    public string Detail => (samples == 1 ? "Learned from 1 recording" : $"Learned from {samples} recordings") + (isYou ? " · you" : "") +
+        (unlearnedBy is null ? "" : $" · not yet recognised by {unlearnedBy}: name them again in a transcript");
 
     /// <summary>Where to hear them; null while looking, or when no recording with them is left.</summary>
     public Notes.VoiceSample? Sample
@@ -82,11 +84,12 @@ public sealed class MainViewModel : ObservableObject
         Insights = new InsightsViewModel(usage);
         Loaded = new LoadedModelsViewModel(settings, models, engines);
         Notetaker = new NotetakerViewModel(settings, notetaker, summarizer, voices, meetings, dictionaryFiles, Save);
-        SetUpVoices(); // after the Notetaker: its recordings are where voice samples come from
         _settings = settings;
         _models = models;
         _engines = engines;
         _hook = hook;
+        SetUpVoices(); // after the Notetaker: its recordings are where voice samples come from
+        notetaker.VoicesRelearned += RefreshVoices;
 
         foreach (var key in settings.Keys)
             Keys.Add(new BindingViewModel(key, this));
@@ -369,8 +372,10 @@ public sealed class MainViewModel : ObservableObject
         StopVoice();
         var version = ++_voicesVersion;
         KnownVoices.Clear();
-        foreach (var (name, samples) in _voices.Voices)
-            KnownVoices.Add(new KnownVoiceRow(name, samples, name.Equals(UserName.First, StringComparison.OrdinalIgnoreCase)));
+        var model = Notes.VoiceModel.Get(_settings.Notetaker.VoiceModel);
+        foreach (var (name, samples, learned) in _voices.Voices(model.Id))
+            KnownVoices.Add(new KnownVoiceRow(name, samples, name.Equals(UserName.First, StringComparison.OrdinalIgnoreCase),
+                learned ? null : model.Name));
 
         // Something to listen to for each person, from the transcripts on the Notetaker page that still have their audio.
         var recordings = Notetaker.Jobs.Where(j => j.TranscriptPath is not null).Select(j => (j.AudioPath, j.TranscriptPath!)).ToList();

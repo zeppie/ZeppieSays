@@ -22,6 +22,8 @@ public sealed class Transcript
 
     /// <summary>Each speaker's voiceprint by label, kept beside the transcript so speakers can be named later.</summary>
     public Dictionary<string, float[]> Voiceprints { get; } = [];
+    /// <summary>The voice model that made <see cref="Voiceprints"/>.</summary>
+    public string VoiceModel { get; init; } = global::ZeppieSays.Notes.VoiceModel.DefaultId;
 
     /// <summary>When each speaker talks and the recording's loudness, for the page's player; saved beside the transcript.</summary>
     public Timeline? Timeline { get; set; }
@@ -34,19 +36,34 @@ public sealed class Transcript
 
     static string VoiceprintsPath(string markdownPath) => Path.ChangeExtension(markdownPath, ".speakers.json");
 
-    public void SaveVoiceprints(string markdownPath) =>
-        File.WriteAllText(VoiceprintsPath(markdownPath), JsonSerializer.Serialize(Voiceprints));
+    /// <summary>The voiceprints file: which voice model made them, and the voiceprint per speaker label.</summary>
+    sealed record VoiceprintFile(string Model, Dictionary<string, float[]> Voices);
 
-    public static Dictionary<string, float[]> LoadVoiceprints(string markdownPath)
+    public void SaveVoiceprints(string markdownPath) => WriteVoiceprints(markdownPath, VoiceModel, Voiceprints);
+
+    static void WriteVoiceprints(string markdownPath, string model, Dictionary<string, float[]> voices) =>
+        File.WriteAllText(VoiceprintsPath(markdownPath), JsonSerializer.Serialize(new VoiceprintFile(model, voices)));
+
+    public static Dictionary<string, float[]> LoadVoiceprints(string markdownPath) => ReadVoiceprints(markdownPath).Voices;
+
+    /// <summary>
+    /// The speakers' voiceprints and the voice model that made them. Files from before the choice of model hold
+    /// just the voiceprints, all made by WeSpeaker.
+    /// </summary>
+    public static (string Model, Dictionary<string, float[]> Voices) ReadVoiceprints(string markdownPath)
     {
         try
         {
             var path = VoiceprintsPath(markdownPath);
-            return File.Exists(path) ? JsonSerializer.Deserialize<Dictionary<string, float[]>>(File.ReadAllText(path)) ?? [] : [];
+            if (!File.Exists(path)) return (global::ZeppieSays.Notes.VoiceModel.LegacyId, []);
+            var json = File.ReadAllText(path);
+            if (System.Text.Json.Nodes.JsonNode.Parse(json)?["Voices"] is not null)
+                return JsonSerializer.Deserialize<VoiceprintFile>(json) is { } file ? (file.Model, file.Voices) : (global::ZeppieSays.Notes.VoiceModel.LegacyId, []);
+            return (global::ZeppieSays.Notes.VoiceModel.LegacyId, JsonSerializer.Deserialize<Dictionary<string, float[]>>(json) ?? []);
         }
         catch
         {
-            return [];
+            return (global::ZeppieSays.Notes.VoiceModel.LegacyId, []);
         }
     }
 
@@ -56,11 +73,11 @@ public sealed class Transcript
         // "Speaker 1" must not also hit "Speaker 10".
         var pattern = $@"(?<![\w]){Regex.Escape(from)}(?![\w])";
         File.WriteAllText(markdownPath, Regex.Replace(File.ReadAllText(markdownPath), pattern, to.Replace("$", "$$")));
-        var voiceprints = LoadVoiceprints(markdownPath);
+        var (model, voiceprints) = ReadVoiceprints(markdownPath);
         if (voiceprints.Remove(from, out var voice))
         {
             voiceprints[to] = voice;
-            File.WriteAllText(VoiceprintsPath(markdownPath), JsonSerializer.Serialize(voiceprints));
+            WriteVoiceprints(markdownPath, model, voiceprints);
         }
         if (Timeline.Load(markdownPath) is { } timeline)
         {

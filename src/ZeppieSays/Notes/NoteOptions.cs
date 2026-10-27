@@ -26,7 +26,11 @@ public sealed class NoteOptions : ObservableObject
         _speakerCount = settings.Speakers,
         _summarize = settings.Summarize,
         _useDictionary = settings.UseDictionary,
+        Speaker = settings.SpeakerDetection.Copy(),
     };
+
+    /// <summary>Speaker detection's finer settings for this file.</summary>
+    public SpeakerSettings Speaker { get; private init; } = new();
 
     public string ModelId
     {

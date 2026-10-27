@@ -124,21 +124,48 @@ switch (args.FirstOrDefault())
         // ZS_MINUTES: only use the start of a long recording, to compare settings quickly.
         if (int.TryParse(Environment.GetEnvironmentVariable("ZS_MINUTES"), out var minutes) && minutes * 60 * Audio.SampleRate < audio.Length)
             audio = audio[..(minutes * 60 * Audio.SampleRate)];
-        await ZeppieSays.Notes.SpeakerDiarizer.EnsureInstalledAsync(new Progress<double>(), CancellationToken.None);
-        var runs = args.Length > 2 ? args.Skip(2) : [ZeppieSays.Notes.SpeakerDiarizer.DefaultThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        // ZS_VOICE_MODEL: the voice model to use (campplus, wespeaker, titanet); the one in Settings otherwise.
+        var voiceModel = Environment.GetEnvironmentVariable("ZS_VOICE_MODEL") ?? settings.Notetaker.VoiceModel;
+        await ZeppieSays.Notes.SpeakerDiarizer.EnsureInstalledAsync(voiceModel, new Progress<double>(), CancellationToken.None);
+        var runs = args.Length > 2 ? args.Skip(2) : ["default"];
         foreach (var run in runs)
         {
             var watch = Stopwatch.StartNew();
-            var turns = run.StartsWith('n')
-                ? ZeppieSays.Notes.SpeakerDiarizer.Run(audio, new Progress<double>(), speakers: int.Parse(run[1..]))
-                : ZeppieSays.Notes.SpeakerDiarizer.Run(audio, new Progress<double>(),
-                    threshold: float.Parse(run, System.Globalization.CultureInfo.InvariantCulture));
+            var options = settings.Notetaker.SpeakerDetection.Copy();
+            if (float.TryParse(run, System.Globalization.CultureInfo.InvariantCulture, out var threshold)) options.Threshold = threshold;
+            var turns = ZeppieSays.Notes.SpeakerDiarizer.Run(audio, new Progress<double>(), voiceModel, options,
+                run.StartsWith('n') ? int.Parse(run[1..]) : 0);
             Console.WriteLine($"{run}: {turns.Select(t => t.Speaker).Distinct().Count()} speakers in {watch.ElapsedMilliseconds} ms");
             foreach (var g in turns.GroupBy(t => t.Speaker))
                 Console.WriteLine($"  speaker {g.Key}: {g.Count()} turns, {g.Sum(t => t.End - t.Start) / (double)Audio.SampleRate:F0} s");
             if (turns.Count <= 40)
                 foreach (var t in turns)
                     Console.WriteLine($"  {t.Start / (double)Audio.SampleRate,6:F1}-{t.End / (double)Audio.SampleRate,6:F1}  speaker {t.Speaker}");
+        }
+        break;
+    }
+
+    case "diarize-raw": // probe diarize-raw <audio file> <embedding .onnx> [threshold | nN ...]  — sherpa's own segments, before Zeppie's clean-up
+    {
+        var audio = ZeppieSays.Notes.AudioFile.Load(args[1]);
+        var segmentation = Directory.GetFiles(Path.Combine(AppPaths.Models, "speakers", "segmentation"), "*.onnx");
+        foreach (var run in args.Skip(3))
+        {
+            var config = new SherpaOnnx.OfflineSpeakerDiarizationConfig();
+            config.Segmentation.Pyannote.Model = segmentation.FirstOrDefault(f => f.Contains("int8")) ?? segmentation[0];
+            config.Segmentation.NumThreads = 4;
+            config.Embedding.Model = args[2];
+            config.Embedding.NumThreads = 4;
+            config.Clustering.NumClusters = run.StartsWith('n') ? int.Parse(run[1..]) : -1;
+            config.Clustering.Threshold = run.StartsWith('n') ? 0.5f : float.Parse(run, System.Globalization.CultureInfo.InvariantCulture);
+            config.MinDurationOn = 0.3f;
+            config.MinDurationOff = 0.5f;
+            using var diarizer = new SherpaOnnx.OfflineSpeakerDiarization(config);
+            var watch = Stopwatch.StartNew();
+            var segments = diarizer.Process(audio).OrderBy(s => s.Start).ToList();
+            Console.WriteLine($"{run}: {segments.Select(s => s.Speaker).Distinct().Count()} clusters in {watch.ElapsedMilliseconds} ms");
+            foreach (var s in segments)
+                Console.WriteLine($"  {s.Start,6:F1}-{s.End,6:F1}  cluster {s.Speaker}");
         }
         break;
     }

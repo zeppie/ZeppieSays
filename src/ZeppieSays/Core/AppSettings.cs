@@ -104,6 +104,10 @@ public sealed class NotetakerSettings
     public bool LabelSpeakers { get; set; } = true;
     /// <summary>How many people speak, when known (more reliable); 0 lets Zeppie Says work it out.</summary>
     public int Speakers { get; set; }
+    /// <summary>The finer settings of speaker detection; each file starts with a copy it can change.</summary>
+    public Notes.SpeakerSettings SpeakerDetection { get; set; } = new();
+    /// <summary>The model that tells voices apart and recognises named people (<see cref="Notes.VoiceModel"/>).</summary>
+    public string VoiceModel { get; set; } = Notes.VoiceModel.DefaultId;
     /// <summary>A summary, decisions and action items at the top, written by the default style model.</summary>
     public bool Summarize { get; set; } = true;
     /// <summary>Passes the dictionary to Whisper as spelling hints.</summary>
