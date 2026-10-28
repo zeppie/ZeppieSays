@@ -145,6 +145,11 @@ switch (args.FirstOrDefault())
         break;
     }
 
+    case "paths": // probe paths  — where the app keeps its data and settings
+        Console.WriteLine($"data: {AppPaths.Data}");
+        Console.WriteLine($"settings: {AppPaths.Settings}");
+        break;
+
     case "words": // probe words <model-id> <language> <audio file> [from-seconds to-seconds]  — each word and when it was said
     {
         var audio = ZeppieSays.Notes.AudioFile.Load(args[3]);

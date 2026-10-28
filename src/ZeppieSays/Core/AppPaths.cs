@@ -22,6 +22,12 @@ public static class AppPaths
 
     static string PointerPath => Path.Combine(Data, "location.json");
 
+    /// <summary>
+    /// Why the chosen settings folder couldn't be used and the local one is used instead, or null. Kept for the
+    /// log: logging here would read <see cref="Settings"/> while it is still being worked out.
+    /// </summary>
+    public static string? SettingsFolderProblem { get; private set; }
+
     static string ReadSettingsFolder()
     {
         try
@@ -31,9 +37,10 @@ public static class AppPaths
                 pointer.TryGetValue("SettingsFolder", out var folder) && !string.IsNullOrWhiteSpace(folder))
                 return Ensure(folder);
         }
-        catch
+        catch (Exception e)
         {
             // An unreachable folder (a OneDrive that isn't there yet) must not stop the app: fall back to local.
+            SettingsFolderProblem = $"{e.GetType().Name}: {e.Message}";
         }
         return Data;
     }

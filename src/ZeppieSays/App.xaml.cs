@@ -58,6 +58,8 @@ public partial class App : Application
 
         _settings = SettingsStore.Load();
         Log.Info($"Settings from {AppPaths.Settings}");
+        if (AppPaths.SettingsFolderProblem is { } problem)
+            Log.Warn($"The chosen settings folder can't be used, so the local one is: {problem}");
         _dictionaryFiles = new DictionaryFiles(_settings, Dispatcher);
         _models = new ModelManager(_settings);
         _engines = new EngineCache(_models, _settings);
