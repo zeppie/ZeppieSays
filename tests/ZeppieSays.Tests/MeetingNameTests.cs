@@ -44,6 +44,16 @@ public class MeetingNameTests
     }
 
     [Fact]
+    public void Records_the_meeting_apps_top_process_so_its_children_come_along()
+    {
+        // As on this PC: ms-teams (43360, started by Explorer) with a second ms-teams (53848) under it.
+        var teams = new HashSet<int> { 43360, 53848 };
+        Assert.Equal(43360, MeetingApps.Root([(53848, 43360), (43360, 34908)], teams));
+        Assert.Equal(53848, MeetingApps.Root([(53848, null)], teams)); // parent unknown: take it as the top
+        Assert.Null(MeetingApps.Root([], teams));
+    }
+
+    [Fact]
     public void Without_speaker_labels_the_call_window_names_it()
     {
         Assert.Equal("Esmee van der Made", Notetaker.MeetingName(Teams("Esmee van der Made"), ["Others"]));

@@ -145,6 +145,54 @@ switch (args.FirstOrDefault())
         break;
     }
 
+    case "devices": // probe devices  — output devices, the defaults, and which programs have sound on each
+    {
+        using var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator();
+        var console = enumerator.GetDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Render, NAudio.CoreAudioApi.Role.Console).ID;
+        var comms = enumerator.GetDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Render, NAudio.CoreAudioApi.Role.Communications).ID;
+        foreach (var device in enumerator.EnumerateAudioEndPoints(NAudio.CoreAudioApi.DataFlow.Render, NAudio.CoreAudioApi.DeviceState.Active))
+        {
+            Console.WriteLine($"{device.FriendlyName}{(device.ID == console ? "  [default]" : "")}{(device.ID == comms ? "  [default communications]" : "")}");
+            var sessions = device.AudioSessionManager.Sessions;
+            for (var i = 0; i < sessions.Count; i++)
+            {
+                var s = sessions[i];
+                string name;
+                try { name = Process.GetProcessById((int)s.GetProcessID).ProcessName; } catch { name = $"pid {s.GetProcessID}"; }
+                Console.WriteLine($"    {name,-24} {s.State}");
+            }
+        }
+        break;
+    }
+
+    case "record": // probe record <app, e.g. Teams> <seconds> <folder>  — a meeting recording as the app makes it
+    {
+        Console.WriteLine($"{args[1]} top process: {ZeppieSays.Notes.MeetingApps.RootProcess(args[1])?.ToString() ?? "not running"}");
+        using var recorder = new ZeppieSays.Notes.MeetingRecorder();
+        recorder.Saved += path => Console.WriteLine($"saved: {path}");
+        recorder.Start(args[1]);
+        await Task.Delay(TimeSpan.FromSeconds(double.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture)));
+        recorder.Stop(args[3], wait: true);
+        break;
+    }
+
+    case "levels": // probe levels <meeting recording>  — how loud each track is, per 10 seconds (left: mic, right: call)
+    {
+        var tracks = ZeppieSays.Notes.AudioFile.LoadChannels(args[1], 2);
+        static string Db(float[] t, int from, int to)
+        {
+            double sum = 0; float peak = 0;
+            for (var i = from; i < Math.Min(to, t.Length); i++) { sum += t[i] * t[i]; peak = Math.Max(peak, Math.Abs(t[i])); }
+            var rms = Math.Sqrt(sum / Math.Max(1, Math.Min(to, t.Length) - from));
+            return $"rms {20 * Math.Log10(rms + 1e-9),6:F1} dB, peak {peak:F3}";
+        }
+        var step = 10 * Audio.SampleRate;
+        Console.WriteLine($"whole:  mic {Db(tracks[0], 0, tracks[0].Length)} | call {Db(tracks[1], 0, tracks[1].Length)}");
+        for (var at = 0; at < tracks[0].Length; at += step)
+            Console.WriteLine($"{at / Audio.SampleRate,4}s:  mic {Db(tracks[0], at, at + step)} | call {Db(tracks[1], at, at + step)}");
+        break;
+    }
+
     case "paths": // probe paths  — where the app keeps its data and settings
         Console.WriteLine($"data: {AppPaths.Data}");
         Console.WriteLine($"settings: {AppPaths.Settings}");
