@@ -50,7 +50,7 @@ public sealed class NoteJob(string audioPath) : ObservableObject
 /// (optional), text with timestamps, a summary (optional). The transcript is written as Markdown next to the
 /// audio, and both move to the Done subfolder. Work pauses while the user dictates, so the keys stay fast.
 /// </summary>
-public sealed class Notetaker : IDisposable
+public sealed partial class Notetaker : IDisposable
 {
     const string DoneFolder = "Done";
     /// <summary>Whisper only reads about 220 tokens of prompt; a short description of the recording is enough.</summary>
@@ -186,6 +186,39 @@ public sealed class Notetaker : IDisposable
         job.StatusText = "Do again · adjust its settings, then start";
     }
 
+    /// <summary>
+    /// Everything that belongs to a recording: the audio, its recording description, the transcript and the files
+    /// beside it, and the earlier versions kept in Done\Previous.
+    /// </summary>
+    public IReadOnlyList<string> FilesOf(NoteJob job)
+    {
+        var files = new List<string> { job.AudioPath, RecordingInfo.PathFor(job.AudioPath) };
+        if (job.TranscriptPath is { } md)
+        {
+            files.AddRange([md, Path.ChangeExtension(md, ".speakers.json"), Timeline.PathFor(md), CorrectionLog.PathFor(md), TranscriptWords.PathFor(md)]);
+            var stem = Path.GetFileNameWithoutExtension(md);
+            if (Directory.Exists(PreviousDirectory))
+                files.AddRange(Directory.GetDirectories(PreviousDirectory, stem + " *")
+                    .Where(d => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(d)[stem.Length..], @"^ \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}$")));
+        }
+        return files.Where(f => File.Exists(f) || Directory.Exists(f)).ToList();
+    }
+
+    /// <summary>Moves a finished (or failed) recording and everything with it to the Recycle Bin, and takes it off the list.</summary>
+    public bool Recycle(NoteJob job)
+    {
+        if (!(job.IsDone || job.IsFailed)) return false;
+        var files = FilesOf(job);
+        if (!RecycleBin.Send(files))
+        {
+            Log.Warn($"Could not move {Path.GetFileName(job.AudioPath)} to the Recycle Bin");
+            return false;
+        }
+        Jobs.Remove(job);
+        Log.Info($"Moved a recording to the Recycle Bin ({files.Count} files and folders)");
+        return true;
+    }
+
     /// <summary>Takes a file that hasn't started off the list. A copy we made in the folder goes too; the original is never touched.</summary>
     public void Discard(NoteJob job)
     {
@@ -278,6 +311,15 @@ public sealed class Notetaker : IDisposable
                 ? await FileTurnsAsync(tracks[0], options, transcript, Report, ct)
                 : await MeetingTurnsAsync(tracks[0], tracks[1], options, transcript, Report, ct);
 
+            // A meeting recording is named after who it was with, unless the user gave it a title.
+            string? newName = null;
+            if (recording is not null && !job.IsRedo && options.Title.Trim().Length == 0 &&
+                MeetingName(recording, turns.Where(t => t.Track == tracks[1]).Select(t => t.Speaker)) is { } meeting)
+            {
+                transcript.Title = meeting;
+                newName = TeamsWindow.Clean($"{meeting} {recording.Started:yyyy-MM-dd HH.mm}");
+            }
+
             if (heard is not null)
             {
                 transcript.Words.AddRange(heard.Words);
@@ -309,7 +351,7 @@ public sealed class Notetaker : IDisposable
 
             var (audio, markdown) = job is { IsRedo: true, TranscriptPath: { } previous }
                 ? await Task.Run(() => SaveAgain(job.AudioPath, previous, transcript), ct)
-                : await Task.Run(() => Save(job.AudioPath, transcript), ct);
+                : await Task.Run(() => Save(job.AudioPath, transcript, newName), ct);
             _ui.Invoke(() =>
             {
                 job.AudioPath = audio;
@@ -545,10 +587,10 @@ public sealed class Notetaker : IDisposable
     /// Moves the audio (and its recording description) into Done and writes the transcript and its speakers'
     /// voiceprints beside it; returns the new audio and transcript paths.
     /// </summary>
-    (string Audio, string Markdown) Save(string audioPath, Transcript transcript)
+    (string Audio, string Markdown) Save(string audioPath, Transcript transcript, string? newName = null)
     {
         Directory.CreateDirectory(DoneDirectory);
-        var audio = UniquePath(DoneDirectory, Path.GetFileName(audioPath));
+        var audio = UniquePath(DoneDirectory, newName is null ? Path.GetFileName(audioPath) : newName + Path.GetExtension(audioPath));
         var markdown = Path.ChangeExtension(audio, ".md");
         File.WriteAllText(markdown, transcript.ToMarkdown());
         if (transcript.Voiceprints.Count > 0) transcript.SaveVoiceprints(markdown);
@@ -583,6 +625,26 @@ public sealed class Notetaker : IDisposable
         if (transcript.Words.Count > 0) new TranscriptWords { SpeechModel = transcript.ModelName, Words = transcript.Words }.Save(markdown);
         return (audioPath, markdown);
     }
+
+    /// <summary>
+    /// A name for a meeting recording from who spoke on the call track: "Call with Esmee van der Made" when it was
+    /// one other person (their voice from the library, else the Teams call window), the call window's title (a
+    /// meeting's subject) when it was more, or null to keep the recording's own name.
+    /// </summary>
+    public static string? MeetingName(RecordingInfo recording, IEnumerable<string?> callSpeakers)
+    {
+        var people = callSpeakers.OfType<string>().Where(s => s != "Others").Distinct().ToList();
+        var window = recording.CallTitle is { Length: > 0 } title ? title : null;
+        if (people.Count == 1)
+        {
+            var name = GenericSpeaker().IsMatch(people[0]) ? window : people[0];
+            return name is null ? null : $"Call with {name}";
+        }
+        return window;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^Speaker \d+$")]
+    private static partial System.Text.RegularExpressions.Regex GenericSpeaker();
 
     /// <summary>A file that is still being copied or recorded can't be opened exclusively; wait until it can.</summary>
     static async Task WaitUntilReadyAsync(string path, CancellationToken ct)

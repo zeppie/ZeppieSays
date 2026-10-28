@@ -789,9 +789,16 @@
                                                          IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
                                                          Visibility="{Binding IsWorking, Converter={StaticResource Visible}}" />
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="Retry" Padding="10,3" VerticalAlignment="Center"
-                                                Command="{Binding DataContext.Retry, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                CommandParameter="{Binding}" Visibility="{Binding IsFailed, Converter={StaticResource Visible}}" />
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                                                    Visibility="{Binding IsFailed, Converter={StaticResource Visible}}">
+                                            <Button Content="Retry" Padding="10,3"
+                                                    Command="{Binding DataContext.Retry, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Content="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="7,4" Margin="4,0,0,0"
+                                                    Command="{Binding DataContext.RecycleJob, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                    CommandParameter="{Binding}" ToolTip="Move to the Recycle Bin"
+                                                    AutomationProperties.Name="Move to the Recycle Bin" />
+                                        </StackPanel>
                                     </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -1089,6 +1096,10 @@
                                                     Command="{Binding RedoJob}" CommandParameter="{Binding Selected}"
                                                     ToolTip="Find the speakers again, with other settings: keeps the text when it can, or transcribes again. The current transcript is kept."
                                                     AutomationProperties.Name="Find the speakers again" />
+                                            <Button Content="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6" Margin="4,0,0,0"
+                                                    Command="{Binding RecycleJob}" CommandParameter="{Binding Selected}"
+                                                    ToolTip="Move the recording, the transcript and everything with it to the Recycle Bin"
+                                                    AutomationProperties.Name="Move to the Recycle Bin" />
                                         </StackPanel>
                                     </Grid>
 

@@ -12,7 +12,7 @@ public sealed record TranscriptParagraph(double Seconds, string? Speaker, string
 /// <summary>A finished transcription, written as Markdown next to the audio file.</summary>
 public sealed class Transcript
 {
-    public required string Title { get; init; }
+    public required string Title { get; set; }
     public required TimeSpan Duration { get; init; }
     public required string ModelName { get; init; }
     public DateTime Created { get; init; } = DateTime.Now;

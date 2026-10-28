@@ -90,6 +90,7 @@ public sealed partial class NotetakerViewModel : ObservableObject
             _notetaker.Redo(job, _title is { Length: > 0 } title ? title : job.Name);
             Raise(nameof(SelectedSpeakerDetection));
         });
+        RecycleJob = new RelayCommand(p => { if (p is NoteJob job) Recycle(job); });
 
         Playback.PropertyChanged += (_, e) =>
         {
@@ -234,6 +235,27 @@ public sealed partial class NotetakerViewModel : ObservableObject
 
     /// <summary>Puts the selected transcript back as Ready, to do it again with other speaker settings.</summary>
     public RelayCommand RedoJob { get; private set; } = null!;
+
+    /// <summary>Moves a recording, its transcript and everything with it to the Recycle Bin, after asking.</summary>
+    public RelayCommand RecycleJob { get; private set; } = null!;
+
+    void Recycle(NoteJob job)
+    {
+        var count = _notetaker.FilesOf(job).Count;
+        var answer = System.Windows.MessageBox.Show(
+            $"Move “{job.Name}” to the Recycle Bin?\n\nThe recording, the transcript and everything kept with it ({count} files and folders) go together. " +
+            "You can restore them from the Recycle Bin.",
+            "Zeppie Says", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Question);
+        if (answer != System.Windows.MessageBoxResult.OK) return;
+        if (job == Selected)
+        {
+            Playback.Close(); // the player holds the audio open
+            Selected = null;
+        }
+        if (!_notetaker.Recycle(job))
+            System.Windows.MessageBox.Show("Could not move it to the Recycle Bin. Is the file open somewhere else?", "Zeppie Says",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+    }
 
     // ---- The selected recording.
 

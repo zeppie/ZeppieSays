@@ -17,6 +17,8 @@ public sealed class RecordingInfo
     public DateTime Started { get; set; }
     /// <summary>Left channel: the user's microphone. Right channel: what the computer played (the others).</summary>
     public bool MicLeftCallRight { get; set; } = true;
+    /// <summary>What the Teams call window was called (a person, or a meeting's subject); null when unknown.</summary>
+    public string? CallTitle { get; set; }
 
     public static string PathFor(string audioPath) => audioPath + ".recording.json";
 
@@ -63,6 +65,7 @@ public sealed class MeetingRecorder : IDisposable
     WaveFileWriter? _writer;
     Stopwatch? _clock;
     Timer? _flush;
+    Timer? _callWatch;
     string? _wavPath;
     RecordingInfo? _info;
 
@@ -100,7 +103,20 @@ public sealed class MeetingRecorder : IDisposable
             _mic.StartRecording();
             _loopback.StartRecording();
             _flush = new Timer(_ => Flush(final: false), null, 1000, 1000);
+            // Who the call is with, for naming it afterwards. The call window may open a moment after the microphone.
+            if (app == "Teams") _callWatch = new Timer(_ => NoteCallTitle(), null, 0, 5000);
             Log.Info($"Recording {FileName(_info)}: mic '{micDevice.FriendlyName}', call audio from '{speakerDevice.FriendlyName}'");
+        }
+    }
+
+    void NoteCallTitle()
+    {
+        if (TeamsWindow.CallTitle() is not { } title) return;
+        lock (_lock)
+        {
+            if (_info is null || !IsRecording || _info.CallTitle == title) return;
+            _info.CallTitle = title;
+            Log.Info($"Teams call window noted ({title.Length} chars)"); // not the name itself: the log stays free of who you talk to
         }
     }
 
@@ -167,6 +183,8 @@ public sealed class MeetingRecorder : IDisposable
         {
             if (!IsRecording) return;
             _flush?.Dispose();
+            _callWatch?.Dispose();
+            _callWatch = null;
             _mic?.StopRecording();
             _loopback?.StopRecording();
         }
@@ -238,6 +256,7 @@ public sealed class MeetingRecorder : IDisposable
         lock (_lock)
         {
             _flush?.Dispose();
+            _callWatch?.Dispose();
             _mic?.Dispose();
             _loopback?.Dispose();
             _writer?.Dispose();
