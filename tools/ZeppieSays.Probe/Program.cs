@@ -167,7 +167,6 @@ switch (args.FirstOrDefault())
 
     case "record": // probe record <app, e.g. Teams> <seconds> <folder>  — a meeting recording as the app makes it
     {
-        Console.WriteLine($"{args[1]} top process: {ZeppieSays.Notes.MeetingApps.RootProcess(args[1])?.ToString() ?? "not running"}");
         using var recorder = new ZeppieSays.Notes.MeetingRecorder();
         recorder.Saved += path => Console.WriteLine($"saved: {path}");
         recorder.Start(args[1]);

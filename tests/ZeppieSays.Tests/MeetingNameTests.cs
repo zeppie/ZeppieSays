@@ -44,13 +44,12 @@ public class MeetingNameTests
     }
 
     [Fact]
-    public void Records_the_meeting_apps_top_process_so_its_children_come_along()
+    public void Knows_which_meeting_app_a_process_belongs_to()
     {
-        // As on this PC: ms-teams (43360, started by Explorer) with a second ms-teams (53848) under it.
-        var teams = new HashSet<int> { 43360, 53848 };
-        Assert.Equal(43360, MeetingApps.Root([(53848, 43360), (43360, 34908)], teams));
-        Assert.Equal(53848, MeetingApps.Root([(53848, null)], teams)); // parent unknown: take it as the top
-        Assert.Null(MeetingApps.Root([], teams));
+        Assert.Equal("Teams", MeetingApps.App("ms-teams"));
+        Assert.Equal("Teams", MeetingApps.App("MS-TEAMS"));
+        Assert.Equal("Webex", MeetingApps.App("CiscoCollabHost"));
+        Assert.Null(MeetingApps.App("msedgewebview2"));
     }
 
     [Fact]

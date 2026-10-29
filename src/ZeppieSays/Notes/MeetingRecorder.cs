@@ -54,6 +54,7 @@ public sealed class MeetingRecorder : IDisposable
         public ISampleProvider? Output;
         public readonly List<float> Pending = [];
         public long Written; // 16 kHz samples written to the file
+        public float Peak; // the loudest sample so far, to notice a track that stayed silent
     }
 
     readonly object _lock = new();
@@ -61,8 +62,6 @@ public sealed class MeetingRecorder : IDisposable
     WasapiCapture? _mic;
     WasapiLoopbackCapture? _loopback;
 #pragma warning restore CS0618
-    /// <summary>The meeting app's own sound (process loopback); when set, <see cref="_loopback"/> isn't used.</summary>
-    WasapiRecorder? _appSound;
     Track? _micTrack, _callTrack;
     WaveFileWriter? _writer;
     Stopwatch? _clock;
@@ -85,10 +84,10 @@ public sealed class MeetingRecorder : IDisposable
             if (IsRecording) return;
             using var devices = new MMDeviceEnumerator();
             var micDevice = devices.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
-            // The call is recorded from the meeting app itself when it can be: Windows' default device is often
-            // not the one the call plays on (Teams on the laptop speakers while the default is the monitor).
+            // The call is recorded from the device the meeting app plays on: Windows' default device is often not
+            // that one (Teams on the laptop speakers while the default is the monitor). Recording the app's own
+            // sound (process loopback) stayed silent for Teams' calls, so it's the device.
             var source = app.Length > 0 ? app : MeetingApps.Playing();
-            _appSound = source is null ? null : AppSound(source);
             var speakerDevice = (source is null ? null : MeetingApps.DeviceOf(source, devices))
                 ?? devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Communications);
 
@@ -99,23 +98,23 @@ public sealed class MeetingRecorder : IDisposable
 
 #pragma warning disable CS0618 // NAudio 3's WasapiRecorderBuilder replaces these; they still work, a port can come later
             _mic = new WasapiCapture(micDevice);
-            if (_appSound is null) _loopback = new WasapiLoopbackCapture(speakerDevice);
+            _loopback = new WasapiLoopbackCapture(speakerDevice);
 #pragma warning restore CS0618
             _micTrack = Prepare(_mic.WaveFormat);
-            _callTrack = Prepare(_appSound?.WaveFormat ?? _loopback!.WaveFormat);
+            _callTrack = Prepare(_loopback.WaveFormat);
             _mic.DataAvailable += (_, e) => Add(_micTrack, e.Buffer.AsSpan(0, e.BytesRecorded));
-            if (_appSound is not null) _appSound.DataAvailable += (buffer, _, _, _) => Add(_callTrack, buffer);
-            else _loopback!.DataAvailable += (_, e) => Add(_callTrack, e.Buffer.AsSpan(0, e.BytesRecorded));
+            _loopback.DataAvailable += (_, e) => Add(_callTrack, e.Buffer.AsSpan(0, e.BytesRecorded));
+            _mic.RecordingStopped += (_, e) => { if (e.Exception is { } x) Log.Warn($"Microphone recording stopped: {x.Message}"); };
+            _loopback.RecordingStopped += (_, e) => { if (e.Exception is { } x) Log.Warn($"Call audio recording stopped: {x.Message}"); };
 
             _clock = Stopwatch.StartNew();
             _mic.StartRecording();
-            if (_appSound is not null) _appSound.StartRecording();
-            else _loopback!.StartRecording();
+            _loopback.StartRecording();
             _flush = new Timer(_ => Flush(final: false), null, 1000, 1000);
             // Who the call is with, for naming it afterwards. The call window may open a moment after the microphone.
             if (app == "Teams") _callWatch = new Timer(_ => NoteCallTitle(), null, 0, 5000);
-            Log.Info($"Recording {FileName(_info)}: mic '{micDevice.FriendlyName}', call audio " +
-                     (_appSound is not null ? $"from {source} itself" : $"from '{speakerDevice.FriendlyName}'"));
+            Log.Info($"Recording {FileName(_info)}: mic '{micDevice.FriendlyName}', call audio from '{speakerDevice.FriendlyName}'" +
+                     (source is null ? "" : $" ({source} plays there)"));
         }
     }
 
@@ -127,27 +126,6 @@ public sealed class MeetingRecorder : IDisposable
             if (_info is null || !IsRecording || _info.CallTitle == title) return;
             _info.CallTitle = title;
             Log.Info($"Teams call window noted ({title.Length} chars)"); // not the name itself: the log stays free of who you talk to
-        }
-    }
-
-    /// <summary>
-    /// A recorder of everything the app (its top process and all its children) plays, on any device; null when
-    /// the app isn't running or Windows can't (process loopback needs Windows 10 2004 or later).
-    /// </summary>
-    static WasapiRecorder? AppSound(string app)
-    {
-        if (MeetingApps.RootProcess(app) is not { } root) return null;
-        try
-        {
-            // Activation is asynchronous and completes on a worker thread; don't wait for it on the caller's thread.
-            var build = Task.Run(() => new WasapiRecorderBuilder()
-                .WithProcessLoopback((uint)root, ProcessLoopbackMode.IncludeTargetProcessTree).BuildAsync());
-            return build.Wait(TimeSpan.FromSeconds(5)) ? build.Result : null;
-        }
-        catch (Exception e)
-        {
-            Log.Warn($"Could not record {app}'s own sound, recording an output device instead: {e.GetBaseException().Message}");
-            return null;
         }
     }
 
@@ -170,7 +148,10 @@ public sealed class MeetingRecorder : IDisposable
             var buffer = new float[Audio.SampleRate / 10];
             int read;
             while ((read = track.Output!.Read(buffer.AsSpan())) > 0)
+            {
                 track.Pending.AddRange(buffer.AsSpan(0, read));
+                for (var i = 0; i < read; i++) track.Peak = Math.Max(track.Peak, Math.Abs(buffer[i]));
+            }
         }
     }
 
@@ -219,7 +200,6 @@ public sealed class MeetingRecorder : IDisposable
             _callWatch = null;
             _mic?.StopRecording();
             _loopback?.StopRecording();
-            _appSound?.StopRecording();
         }
         // Stopping raises a last DataAvailable on the capture threads; flush after they're done.
         Thread.Sleep(150);
@@ -230,10 +210,11 @@ public sealed class MeetingRecorder : IDisposable
             _writer = null;
             _mic?.Dispose();
             _loopback?.Dispose();
-            _appSound?.Dispose();
             _mic = null;
             _loopback = null;
-            _appSound = null;
+            // A call track that never made a sound means the call played on another device than the one recorded.
+            if (_callTrack is { Peak: < 0.0005f } && Elapsed.TotalSeconds > 20)
+                Log.Warn("The call audio stayed silent: the meeting app may play on another device than the one recorded");
             wav = _wavPath;
             info = _info;
             _clock?.Stop();
@@ -294,7 +275,6 @@ public sealed class MeetingRecorder : IDisposable
             _callWatch?.Dispose();
             _mic?.Dispose();
             _loopback?.Dispose();
-            _appSound?.Dispose();
             _writer?.Dispose();
             _writer = null;
         }
