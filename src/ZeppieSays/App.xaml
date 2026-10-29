@@ -7,6 +7,9 @@
         <ResourceDictionary>
             <SolidColorBrush x:Key="Accent" Color="#7C5CFF" />
             <SolidColorBrush x:Key="AccentSoft" Color="#337C5CFF" />
+            <!-- A second color, for websites next to apps (the accent) on the Styles page. -->
+            <SolidColorBrush x:Key="Website" Color="#0E9F9A" />
+            <SolidColorBrush x:Key="WebsiteSoft" Color="#330E9F9A" />
             <!-- The logo's purple, light at the top like the icon; readable on light and dark backgrounds. -->
             <LinearGradientBrush x:Key="WordmarkAccent" StartPoint="0,0" EndPoint="0,1">
                 <GradientStop Color="#8A5CF6" Offset="0" />

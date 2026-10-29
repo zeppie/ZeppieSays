@@ -1509,7 +1509,7 @@
 
             <!-- Styles -->
             <TabItem Header="Styles" Tag="&#xE8D2;" x:Name="StylesTab">
-                <!-- Every style in a list; the selected one in the editor beside it. AI providers open in a panel. -->
+                <!-- Every style in a list; the selected one in the editor beside it. The AI providers are on the Settings page. -->
                 <Grid DataContext="{Binding Styles}" Margin="0,4,18,16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -1522,15 +1522,10 @@
                     </Grid.ColumnDefinitions>
 
                     <!-- Top bar -->
-                    <TextBlock Grid.ColumnSpan="3" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,0,12"
-                               Text="A style decides how your dictation is tidied up: by rules only, or rewritten by an AI. Each app or website can have its own." />
-                    <Button Grid.Column="2" HorizontalAlignment="Right" Command="{Binding ToggleProviders}" Margin="0,0,0,12" Padding="12,6"
-                            AutomationProperties.Name="Open AI providers">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBlock Text="AI providers" />
-                        </StackPanel>
-                    </Button>
+                    <TextBlock Grid.ColumnSpan="3" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,0,12" TextWrapping="Wrap">
+                        <Run Text="A style decides how your dictation is tidied up: by rules only, or rewritten by an AI. Each app or website can have its own. The AI models are under" />
+                        <Hyperlink Click="OpenAiProviders_Click">Settings, AI providers</Hyperlink><Run Text="." />
+                    </TextBlock>
 
                     <!-- The styles -->
                     <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0" Padding="10">
@@ -1655,9 +1650,34 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="{x:Type ui:RuleViewModel}">
-                                            <Border CornerRadius="14" Padding="12,4,4,4" Margin="0,0,6,6" ToolTip="{Binding ChipTip}"
-                                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                            <!-- Apps in the accent color with an app icon; websites in teal with a globe -->
+                                            <Border CornerRadius="14" Padding="10,4,4,4" Margin="0,0,6,6" ToolTip="{Binding ChipTip}">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="{StaticResource AccentSoft}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsWebsite}" Value="True">
+                                                                <Setter Property="Background" Value="{StaticResource WebsiteSoft}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
                                                 <StackPanel Orientation="Horizontal">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" VerticalAlignment="Center"
+                                                               Margin="0,0,7,0">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="&#xE7F4;" />
+                                                                <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsWebsite}" Value="True">
+                                                                        <Setter Property="Text" Value="&#xE774;" />
+                                                                        <Setter Property="Foreground" Value="{StaticResource Website}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                     <TextBlock Text="{Binding ChipText}" VerticalAlignment="Center" />
                                                     <Button Content="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10"
                                                             Padding="6,4" Margin="6,0,0,0" Background="Transparent" BorderThickness="0"
@@ -1686,7 +1706,16 @@
                                     <Button Grid.Column="2" Content="Add" Command="{Binding AddRule}" MinWidth="64" />
                                 </Grid>
                                 <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0" TextWrapping="Wrap"
-                                           Text="Website rules match words in the window title (such as Gmail) and win over app rules. Apps you dictate into show up in the list." />
+                                           Text="Apps you dictate into show up in the list. A website matches words in the window title (such as Gmail) and wins over an app." />
+                                <!-- What the two colors mean -->
+                                <StackPanel Orientation="Horizontal" Margin="2,6,0,0">
+                                    <TextBlock Text="&#xE7F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11" Foreground="{StaticResource Accent}"
+                                               VerticalAlignment="Center" Margin="0,0,5,0" />
+                                    <TextBlock Text="App" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                                    <TextBlock Text="&#xE774;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11" Foreground="{StaticResource Website}"
+                                               VerticalAlignment="Center" Margin="0,0,5,0" />
+                                    <TextBlock Text="Website or window title" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                </StackPanel>
 
                                 <!-- Try it -->
                                 <TextBlock Text="Try it" Style="{StaticResource SectionTitle}" Margin="0,24,0,8" />
@@ -1716,68 +1745,6 @@
                         </ScrollViewer>
                     </Border>
 
-                    <!-- AI providers: a panel over the page, from the right -->
-                    <Grid Grid.RowSpan="2" Grid.ColumnSpan="3" Margin="0,0,-18,-16"
-                          Visibility="{Binding ShowProviders, Converter={StaticResource Visible}}">
-                        <Border Background="#33000000" MouseLeftButtonDown="ProvidersScrim_MouseDown" />
-                        <Border HorizontalAlignment="Right" Width="440" CornerRadius="12,0,0,12"
-                                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,0,0">
-                            <DockPanel>
-                                <Grid DockPanel.Dock="Top" Margin="24,20,16,8">
-                                    <TextBlock Text="AI providers" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
-                                    <Button Content="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" HorizontalAlignment="Right"
-                                            Padding="8,6" Background="Transparent" BorderThickness="0" Command="{Binding ToggleProviders}"
-                                            ToolTip="Close" AutomationProperties.Name="Close AI providers" />
-                                </Grid>
-                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,0,24,20">
-                                    <StackPanel>
-                                        <TextBlock Text="Default model, used by every style unless it picks another" Style="{StaticResource Caption}"
-                                                   Margin="0,0,0,4" TextWrapping="Wrap" />
-                                        <ComboBox ItemsSource="{x:Static ui:StylesViewModel.DefaultProviders}" DisplayMemberPath="Label"
-                                                  SelectedValuePath="Value" SelectedValue="{Binding DefaultProvider}" />
-                                        <ComboBox IsEditable="True" ItemsSource="{Binding DefaultModelSuggestions}"
-                                                  Text="{Binding DefaultModel, UpdateSourceTrigger=LostFocus}" Margin="0,8,0,0" />
-                                        <StackPanel Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,12,0,4" />
-                                            <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
-                                                      SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
-                                            <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
-                                                       Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
-                                        </StackPanel>
-
-                                        <TextBlock Text="Ollama, on this PC" Style="{StaticResource SectionTitle}" Margin="0,24,0,8" />
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBox Text="{Binding OllamaUrl, UpdateSourceTrigger=LostFocus}" ToolTip="Ollama address" />
-                                            <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshOllama}" Margin="8,0,0,0" />
-                                        </Grid>
-                                        <TextBlock Text="{Binding OllamaStatus}" Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap" />
-
-                                        <TextBlock Text="Cloud" Style="{StaticResource SectionTitle}" Margin="0,24,0,8" />
-                                        <TextBlock Text="OpenAI API key" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                                        <PasswordBox x:Name="OpenAiKeyBox" LostFocus="OpenAiKeyBox_LostFocus" />
-                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
-                                                   Visibility="{Binding HasOpenAiKey, Converter={StaticResource Visible}}">
-                                            Key saved, encrypted for your Windows account. Type a new one to replace it, or
-                                            <Hyperlink Click="RemoveOpenAiKey_Click">remove it</Hyperlink>.
-                                        </TextBlock>
-
-                                        <TextBlock Text="Anthropic (Claude) API key" Style="{StaticResource Caption}" Margin="0,14,0,4" />
-                                        <PasswordBox x:Name="AnthropicKeyBox" LostFocus="AnthropicKeyBox_LostFocus" />
-                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
-                                                   Visibility="{Binding HasAnthropicKey, Converter={StaticResource Visible}}">
-                                            Key saved, encrypted for your Windows account. Type a new one to replace it, or
-                                            <Hyperlink Click="RemoveAnthropicKey_Click">remove it</Hyperlink>.
-                                        </TextBlock>
-                                    </StackPanel>
-                                </ScrollViewer>
-                            </DockPanel>
-                        </Border>
-                    </Grid>
                 </Grid>
             </TabItem>
 
@@ -1939,6 +1906,76 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                        <!-- AI providers: the models the styles rewrite with -->
+                        <Border x:Name="AiProvidersCard" Style="{StaticResource Card}" DataContext="{Binding Styles}">
+                            <StackPanel>
+                                <TextBlock Text="AI providers" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,14" TextWrapping="Wrap"
+                                           Text="The AI models your styles rewrite with. Which style is used where is on the Styles page." />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="28" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <!-- The default model, and Ollama on this PC -->
+                                    <StackPanel>
+                                        <TextBlock Text="Default model, used by every style unless it picks another" Style="{StaticResource Caption}"
+                                                   Margin="0,0,0,4" TextWrapping="Wrap" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="1.3*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox ItemsSource="{x:Static ui:StylesViewModel.DefaultProviders}" DisplayMemberPath="Label"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding DefaultProvider}" />
+                                            <ComboBox Grid.Column="2" IsEditable="True" ItemsSource="{Binding DefaultModelSuggestions}"
+                                                      Text="{Binding DefaultModel, UpdateSourceTrigger=LostFocus}" />
+                                        </Grid>
+                                        <StackPanel Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,12,0,4" />
+                                            <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
+                                            <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                       Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
+                                        </StackPanel>
+
+                                        <TextBlock Text="Ollama address, on this PC" Style="{StaticResource Caption}" Margin="0,14,0,4" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Text="{Binding OllamaUrl, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Ollama address" />
+                                            <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshOllama}" Margin="8,0,0,0" />
+                                        </Grid>
+                                        <TextBlock Text="{Binding OllamaStatus}" Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <!-- Cloud keys -->
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="OpenAI API key" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                        <PasswordBox x:Name="OpenAiKeyBox" LostFocus="OpenAiKeyBox_LostFocus" />
+                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding HasOpenAiKey, Converter={StaticResource Visible}}">
+                                            Key saved, encrypted for your Windows account. Type a new one to replace it, or
+                                            <Hyperlink Click="RemoveOpenAiKey_Click">remove it</Hyperlink>.
+                                        </TextBlock>
+
+                                        <TextBlock Text="Anthropic (Claude) API key" Style="{StaticResource Caption}" Margin="0,14,0,4" />
+                                        <PasswordBox x:Name="AnthropicKeyBox" LostFocus="AnthropicKeyBox_LostFocus" />
+                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding HasAnthropicKey, Converter={StaticResource Visible}}">
+                                            Key saved, encrypted for your Windows account. Type a new one to replace it, or
+                                            <Hyperlink Click="RemoveAnthropicKey_Click">remove it</Hyperlink>.
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource Caption}" Margin="2,10,0,0" TextWrapping="Wrap"
+                                                   Text="Keys stay on this PC, also when your settings folder is in OneDrive." />
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
                         </Border>
                         <!-- Where the user's own data lives -->

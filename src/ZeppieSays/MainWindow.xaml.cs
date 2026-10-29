@@ -35,6 +35,13 @@ public partial class MainWindow : Window
 
     void OpenSettings_Click(object sender, RoutedEventArgs e) => Tabs.SelectedItem = SettingsTab;
 
+    /// <summary>Opens Settings at the AI providers card, once the page has been laid out.</summary>
+    void OpenAiProviders_Click(object sender, RoutedEventArgs e)
+    {
+        Tabs.SelectedItem = SettingsTab;
+        Dispatcher.BeginInvoke(() => AiProvidersCard.BringIntoView(), DispatcherPriority.Loaded);
+    }
+
     // ---- The strip of recordings: no scrollbar; drag it, use the arrows or the wheel, and a thin line shows where you are.
 
     readonly DispatcherTimer _stripGlide = new() { Interval = TimeSpan.FromMilliseconds(15) };
@@ -259,9 +266,6 @@ public partial class MainWindow : Window
         Model.AddWord();
         e.Handled = true;
     }
-
-    /// <summary>Clicking beside the AI providers panel closes it.</summary>
-    void ProvidersScrim_MouseDown(object sender, MouseButtonEventArgs e) => Model.Styles.ShowProviders = false;
 
     // API keys go straight from the password box into encrypted storage; they are never shown again.
     void OpenAiKeyBox_LostFocus(object sender, RoutedEventArgs e) => SaveKey((PasswordBox)sender, Model.Styles.SetOpenAiKey);

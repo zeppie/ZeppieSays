@@ -7,7 +7,7 @@ namespace ZeppieSays.UI;
 
 /// <summary>
 /// The Styles tab: every style in a list, the selected one in an editor beside it (with the apps and websites it is
-/// used in), and the AI providers in a panel of their own.
+/// used in). The AI providers it uses are edited on the Settings page.
 /// </summary>
 public sealed class StylesViewModel : ObservableObject
 {
@@ -66,7 +66,6 @@ public sealed class StylesViewModel : ObservableObject
     public RelayCommand RemoveRule { get; }
     public RelayCommand TryStyle { get; }
     public RelayCommand RefreshOllama { get; }
-    public RelayCommand ToggleProviders { get; }
 
     public StylesViewModel(AppSettings settings, TextRewriter rewriter, Action save)
     {
@@ -116,7 +115,6 @@ public sealed class StylesViewModel : ObservableObject
         RemoveRule = new RelayCommand(p => { if (p is RuleViewModel rule) RemoveRuleFor(rule); });
         TryStyle = new RelayCommand(_ => _ = TryAsync());
         RefreshOllama = new RelayCommand(_ => _ = LoadOllamaModelsAsync());
-        ToggleProviders = new RelayCommand(_ => ShowProviders = !ShowProviders);
         _ = LoadOllamaModelsAsync();
         _ = LoadOpenAiModelsAsync();
         _ = LoadAnthropicModelsAsync();
@@ -151,14 +149,6 @@ public sealed class StylesViewModel : ObservableObject
             foreach (var style in Styles) style.RefreshUse();
         }
     }
-
-    /// <summary>The AI providers panel (default model, Ollama, API keys) is open.</summary>
-    public bool ShowProviders
-    {
-        get => _showProviders;
-        set => Set(ref _showProviders, value);
-    }
-    bool _showProviders;
 
     /// <summary>The apps and websites the selected style is used in, newest first.</summary>
     public ObservableCollection<RuleViewModel> SelectedRules { get; } = [];
@@ -531,7 +521,7 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
 
     public bool UsesDefault => Model.Provider == LlmProvider.Default;
 
-    public string DefaultNotice => $"Uses the default model ({owner.DefaultModelLabel}). Change it under AI providers, top right.";
+    public string DefaultNotice => $"Uses the default model ({owner.DefaultModelLabel}). Change it in Settings, under AI providers.";
 
     /// <summary>"qwen3:8b · Medium" for the list: which AI and how much it may change.</summary>
     public string Summary => Model.Provider == LlmProvider.None
@@ -590,10 +580,10 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
     {
         LlmProvider.OpenAI => owner.HasOpenAiKey
             ? "Text dictated with this style is sent to OpenAI."
-            : "Text dictated with this style is sent to OpenAI. Add your API key under AI providers, top right.",
+            : "Text dictated with this style is sent to OpenAI. Add your API key in Settings, under AI providers.",
         LlmProvider.Anthropic => owner.HasAnthropicKey
             ? "Text dictated with this style is sent to Anthropic."
-            : "Text dictated with this style is sent to Anthropic. Add your API key under AI providers, top right.",
+            : "Text dictated with this style is sent to Anthropic. Add your API key in Settings, under AI providers.",
         _ => "",
     };
 }
@@ -602,8 +592,11 @@ public sealed class RuleViewModel(StyleRule rule, StylesViewModel owner) : Obser
 {
     public StyleRule Model { get; } = rule;
 
-    /// <summary>"Outlook" for olk, or "“Gmail” in the title" for a website.</summary>
-    public string ChipText => Model.Kind == RuleKind.App ? AppName(Model.Match) : $"“{Model.Match}” in the title";
+    /// <summary>A website (words in the window title) rather than an app; the two get different colors.</summary>
+    public bool IsWebsite => Model.Kind == RuleKind.Title;
+
+    /// <summary>"Outlook" for olk, or "Gmail" for a website (its color and globe say it's a website).</summary>
+    public string ChipText => Model.Kind == RuleKind.App ? AppName(Model.Match) : Model.Match;
 
     public string ChipTip => Model.Kind == RuleKind.App
         ? $"Used when you dictate into {Model.Match}"
