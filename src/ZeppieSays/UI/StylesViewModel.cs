@@ -5,7 +5,10 @@ using ZeppieSays.Services;
 
 namespace ZeppieSays.UI;
 
-/// <summary>The Styles tab: the styles themselves, which app or website uses which style, and the AI providers.</summary>
+/// <summary>
+/// The Styles tab: every style in a list, the selected one in an editor beside it (with the apps and websites it is
+/// used in), and the AI providers in a panel of their own.
+/// </summary>
 public sealed class StylesViewModel : ObservableObject
 {
     readonly AppSettings _settings;
@@ -63,6 +66,7 @@ public sealed class StylesViewModel : ObservableObject
     public RelayCommand RemoveRule { get; }
     public RelayCommand TryStyle { get; }
     public RelayCommand RefreshOllama { get; }
+    public RelayCommand ToggleProviders { get; }
 
     public StylesViewModel(AppSettings settings, TextRewriter rewriter, Action save)
     {
@@ -86,6 +90,7 @@ public sealed class StylesViewModel : ObservableObject
         foreach (var style in settings.Styles) Styles.Add(new StyleViewModel(style, this));
         foreach (var rule in settings.StyleRules) Rules.Add(new RuleViewModel(rule, this));
         _selected = Styles.FirstOrDefault(s => s.Model.Id != StyleDefaults.RawId) ?? Styles.FirstOrDefault();
+        RefreshSelectedRules();
 
         AddStyle = new RelayCommand(_ =>
         {
@@ -111,6 +116,7 @@ public sealed class StylesViewModel : ObservableObject
         RemoveRule = new RelayCommand(p => { if (p is RuleViewModel rule) RemoveRuleFor(rule); });
         TryStyle = new RelayCommand(_ => _ = TryAsync());
         RefreshOllama = new RelayCommand(_ => _ = LoadOllamaModelsAsync());
+        ToggleProviders = new RelayCommand(_ => ShowProviders = !ShowProviders);
         _ = LoadOllamaModelsAsync();
         _ = LoadOpenAiModelsAsync();
         _ = LoadAnthropicModelsAsync();
@@ -121,7 +127,13 @@ public sealed class StylesViewModel : ObservableObject
     public StyleViewModel? Selected
     {
         get => _selected;
-        set { if (Set(ref _selected, value)) { TryResult = null; Raise(nameof(CanDeleteSelected)); } }
+        set
+        {
+            if (!Set(ref _selected, value)) return;
+            TryResult = null;
+            Raise(nameof(CanDeleteSelected));
+            RefreshSelectedRules();
+        }
     }
     StyleViewModel? _selected;
 
@@ -130,8 +142,41 @@ public sealed class StylesViewModel : ObservableObject
     public string DefaultStyleId
     {
         get => _settings.DefaultStyleId;
-        set { if (value is null) return; _settings.DefaultStyleId = value; Save(); Raise(); }
+        set
+        {
+            if (value is null) return;
+            _settings.DefaultStyleId = value;
+            Save();
+            Raise();
+            foreach (var style in Styles) style.RefreshUse();
+        }
     }
+
+    /// <summary>The AI providers panel (default model, Ollama, API keys) is open.</summary>
+    public bool ShowProviders
+    {
+        get => _showProviders;
+        set => Set(ref _showProviders, value);
+    }
+    bool _showProviders;
+
+    /// <summary>The apps and websites the selected style is used in, newest first.</summary>
+    public ObservableCollection<RuleViewModel> SelectedRules { get; } = [];
+
+    void RefreshSelectedRules()
+    {
+        SelectedRules.Clear();
+        foreach (var rule in Rules.Where(r => r.StyleId == Selected?.Model.Id)) SelectedRules.Add(rule);
+        Raise(nameof(HasSelectedRules));
+        Raise(nameof(NoSelectedRules));
+    }
+
+    public bool HasSelectedRules => SelectedRules.Count > 0;
+    public bool NoSelectedRules => SelectedRules.Count == 0;
+
+    /// <summary>"Notepad, OneNote" for a style's line in the list.</summary>
+    internal string UsedInText(Style style) =>
+        string.Join(", ", Rules.Where(r => r.StyleId == style.Id).Select(r => r.ChipText).Distinct()); // olk and outlook are both "Outlook"
 
     // ---- Ollama ---------------------------------------------------------------------------------
 
@@ -318,13 +363,6 @@ public sealed class StylesViewModel : ObservableObject
     }
     string _newRuleMatch = "";
 
-    public string NewRuleStyleId
-    {
-        get => _newRuleStyleId;
-        set => Set(ref _newRuleStyleId, value ?? "");
-    }
-    string _newRuleStyleId = "formal";
-
     /// <summary>Apps (or window titles) recently dictated into, so you don't have to know process names.</summary>
     public IReadOnlyList<string> MatchSuggestions =>
         NewRuleKind == nameof(RuleKind.App)
@@ -333,17 +371,18 @@ public sealed class StylesViewModel : ObservableObject
 
     void AddNewRule()
     {
-        if (string.IsNullOrWhiteSpace(NewRuleMatch) || Styles.All(s => s.Model.Id != NewRuleStyleId)) return;
+        if (string.IsNullOrWhiteSpace(NewRuleMatch) || Selected is not { } style) return;
         var rule = new StyleRule
         {
             Kind = Enum.Parse<RuleKind>(NewRuleKind),
             Match = NewRuleMatch.Trim(),
-            StyleId = NewRuleStyleId,
+            StyleId = style.Model.Id,
         };
         _settings.StyleRules.Insert(0, rule); // newest first, so it wins over an older rule for the same app
         Rules.Insert(0, new RuleViewModel(rule, this));
         NewRuleMatch = "";
         Save();
+        RulesChanged();
     }
 
     void RemoveRuleFor(RuleViewModel rule)
@@ -351,6 +390,13 @@ public sealed class StylesViewModel : ObservableObject
         _settings.StyleRules.Remove(rule.Model);
         Rules.Remove(rule);
         Save();
+        RulesChanged();
+    }
+
+    void RulesChanged()
+    {
+        RefreshSelectedRules();
+        foreach (var style in Styles) style.RefreshUse();
     }
 
     /// <summary>Called when the tab opens, so recently used apps show up in the suggestions.</summary>
@@ -462,13 +508,13 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
     public string ModelName
     {
         get => Model.Model;
-        set { Model.Model = value?.Trim() ?? ""; owner.Save(); Raise(); }
+        set { Model.Model = value?.Trim() ?? ""; owner.Save(); Raise(); Raise(nameof(Summary)); }
     }
 
     public string Strength
     {
         get => Model.Strength.ToString();
-        set { if (value is not null && Enum.TryParse<Strength>(value, out var s)) { Model.Strength = s; owner.Save(); Raise(); } }
+        set { if (value is not null && Enum.TryParse<Strength>(value, out var s)) { Model.Strength = s; owner.Save(); Raise(); Raise(nameof(Summary)); } }
     }
 
     public string Instructions
@@ -485,7 +531,42 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
 
     public bool UsesDefault => Model.Provider == LlmProvider.Default;
 
-    public string DefaultNotice => $"Uses the default model ({owner.DefaultModelLabel}). You can change it under AI providers below.";
+    public string DefaultNotice => $"Uses the default model ({owner.DefaultModelLabel}). Change it under AI providers, top right.";
+
+    /// <summary>"qwen3:8b · Medium" for the list: which AI and how much it may change.</summary>
+    public string Summary => Model.Provider == LlmProvider.None
+        ? "No AI: fillers, dictionary and capitals"
+        : $"{owner.Effective(Model).Model} · {Model.Strength}";
+
+    /// <summary>Where it is used, for the list: the default for everything else, and its apps and websites.</summary>
+    public string UsedIn
+    {
+        get
+        {
+            var apps = owner.UsedInText(Model);
+            return IsDefault ? (apps.Length > 0 ? "Everything else, and " + apps : "Everything else") : apps;
+        }
+    }
+
+    public bool HasUsedIn => UsedIn.Length > 0;
+
+    /// <summary>The style for every app and website without one of its own.</summary>
+    public bool IsDefault
+    {
+        get => owner.DefaultStyleId == Model.Id;
+        set { if (value && !IsDefault) owner.DefaultStyleId = Model.Id; }
+    }
+
+    /// <summary>The default moves by picking another style, so the current one's box can't be unticked.</summary>
+    public bool CanMakeDefault => !IsDefault;
+
+    public void RefreshUse()
+    {
+        Raise(nameof(UsedIn));
+        Raise(nameof(HasUsedIn));
+        Raise(nameof(IsDefault));
+        Raise(nameof(CanMakeDefault));
+    }
 
     /// <summary>Cloud is about where the text actually goes, so a style on a cloud default counts too.</summary>
     public bool IsCloud => owner.Effective(Model).IsCloud;
@@ -494,6 +575,7 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
 
     public void Refresh()
     {
+        Raise(nameof(Summary));
         Raise(nameof(ModelName));
         Raise(nameof(UsesAi));
         Raise(nameof(UsesOwnModel));
@@ -508,10 +590,10 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
     {
         LlmProvider.OpenAI => owner.HasOpenAiKey
             ? "Text dictated with this style is sent to OpenAI."
-            : "Text dictated with this style is sent to OpenAI. Add your API key under AI providers below.",
+            : "Text dictated with this style is sent to OpenAI. Add your API key under AI providers, top right.",
         LlmProvider.Anthropic => owner.HasAnthropicKey
             ? "Text dictated with this style is sent to Anthropic."
-            : "Text dictated with this style is sent to Anthropic. Add your API key under AI providers below.",
+            : "Text dictated with this style is sent to Anthropic. Add your API key under AI providers, top right.",
         _ => "",
     };
 }
@@ -520,7 +602,34 @@ public sealed class RuleViewModel(StyleRule rule, StylesViewModel owner) : Obser
 {
     public StyleRule Model { get; } = rule;
 
-    public string Label => Model.Kind == RuleKind.App ? $"App: {Model.Match}" : $"Window title contains \"{Model.Match}\"";
+    /// <summary>"Outlook" for olk, or "“Gmail” in the title" for a website.</summary>
+    public string ChipText => Model.Kind == RuleKind.App ? AppName(Model.Match) : $"“{Model.Match}” in the title";
+
+    public string ChipTip => Model.Kind == RuleKind.App
+        ? $"Used when you dictate into {Model.Match}"
+        : $"Used when the window title contains \"{Model.Match}\", such as a browser tab. Wins over app rules.";
+
+    /// <summary>The name people know for a program whose process name says little; others as they are.</summary>
+    public static string AppName(string process) => process.ToLowerInvariant() switch
+    {
+        "ms-teams" or "teams" => "Teams",
+        "olk" or "outlook" => "Outlook",
+        "winword" => "Word",
+        "excel" => "Excel",
+        "powerpnt" => "PowerPoint",
+        "onenote" => "OneNote",
+        "devenv" => "Visual Studio",
+        "code" => "VS Code",
+        "msedge" => "Edge",
+        "chrome" => "Chrome",
+        "firefox" => "Firefox",
+        "notepad" => "Notepad",
+        "slack" => "Slack",
+        "whatsapp" or "whatsapp.root" => "WhatsApp",
+        "claude" => "Claude",
+        "explorer" => "File Explorer",
+        _ => process,
+    };
 
     public string StyleId
     {

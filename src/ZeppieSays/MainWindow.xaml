@@ -1509,63 +1509,187 @@
 
             <!-- Styles -->
             <TabItem Header="Styles" Tag="&#xE8D2;" x:Name="StylesTab">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16" DataContext="{Binding Styles}">
-                    <StackPanel>
-                        <!-- Edit one style -->
-                        <Border Style="{StaticResource Card}">
+                <!-- Every style in a list; the selected one in the editor beside it. AI providers open in a panel. -->
+                <Grid DataContext="{Binding Styles}" Margin="0,4,18,16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="300" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Top bar -->
+                    <TextBlock Grid.ColumnSpan="3" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,0,12"
+                               Text="A style decides how your dictation is tidied up: by rules only, or rewritten by an AI. Each app or website can have its own." />
+                    <Button Grid.Column="2" HorizontalAlignment="Right" Command="{Binding ToggleProviders}" Margin="0,0,0,12" Padding="12,6"
+                            AutomationProperties.Name="Open AI providers">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="AI providers" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- The styles -->
+                    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0" Padding="10">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Top" Command="{Binding AddStyle}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                    Padding="10,8" Margin="0,0,0,8" Style="{DynamicResource AccentButtonStyle}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <TextBlock Text="New style" />
+                                </StackPanel>
+                            </Button>
+                            <ListBox ItemsSource="{Binding Styles}" SelectedItem="{Binding Selected}"
+                                     BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Cursor" Value="Hand" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Bd" CornerRadius="8" Padding="10,8" Margin="0,1" Background="Transparent">
+                                                        <ContentPresenter />
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                                        </Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type ui:StyleViewModel}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="170" />
+                                                <Border CornerRadius="8" Padding="7,1" Margin="8,0,0,0" Background="{StaticResource AccentSoft}"
+                                                        VerticalAlignment="Center" Visibility="{Binding IsDefault, Converter={StaticResource Visible}}"
+                                                        ToolTip="Used for every app and website without a style of its own">
+                                                    <TextBlock Text="Default" FontSize="11" Foreground="{StaticResource Accent}" />
+                                                </Border>
+                                                <TextBlock Text="&#xE753;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Margin="8,0,0,0"
+                                                           VerticalAlignment="Center" Foreground="#C77700" ToolTip="Sends your text to a cloud AI"
+                                                           Visibility="{Binding IsCloud, Converter={StaticResource Visible}}" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Summary}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding UsedIn}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                                       Visibility="{Binding HasUsedIn, Converter={StaticResource Visible}}" ToolTip="{Binding UsedIn}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- The selected style -->
+                    <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource Card}" Margin="0" Padding="0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,20,24,20">
                             <StackPanel>
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <ComboBox ItemsSource="{Binding Styles}" SelectedItem="{Binding Selected}" DisplayMemberPath="Name" />
-                                    <Button Grid.Column="1" Content="New" Command="{Binding AddStyle}" Margin="8,0,0,0" MinWidth="64" />
-                                    <Button Grid.Column="2" Content="Delete" Command="{Binding DeleteStyle}" Margin="8,0,0,0" MinWidth="64"
-                                            IsEnabled="{Binding CanDeleteSelected}" />
-                                </Grid>
-
                                 <StackPanel DataContext="{Binding Selected}">
-                                    <TextBlock Text="Name" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
+                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" FontSize="20" FontWeight="SemiBold"
+                                             BorderThickness="0,0,0,1" Background="Transparent" Padding="0,2" Margin="0,0,0,4"
+                                             AutomationProperties.Name="Style name" ToolTip="Click to rename" />
+                                    <CheckBox Content="Use for everything else" IsChecked="{Binding IsDefault}" IsEnabled="{Binding CanMakeDefault}"
+                                              Margin="0,6,0,0"
+                                              ToolTip="The style for every app and website without one of its own. Pick another style to move it." />
 
-                                    <Grid Margin="0,10,0,0">
+                                    <!-- How it rewrites -->
+                                    <TextBlock Text="How it rewrites" Style="{StaticResource SectionTitle}" Margin="0,22,0,8" />
+                                    <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="1.3*" />
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Margin="0,0,6,0">
+                                        <StackPanel>
                                             <TextBlock Text="AI" Style="{StaticResource Caption}" Margin="0,0,0,4" />
                                             <ComboBox ItemsSource="{x:Static ui:StylesViewModel.Providers}" DisplayMemberPath="Label"
                                                       SelectedValuePath="Value" SelectedValue="{Binding Provider}" />
                                         </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="6,0,0,0" Visibility="{Binding UsesOwnModel, Converter={StaticResource Visible}}">
+                                        <StackPanel Grid.Column="2" Visibility="{Binding UsesOwnModel, Converter={StaticResource Visible}}">
                                             <TextBlock Text="Model" Style="{StaticResource Caption}" Margin="0,0,0,4" />
                                             <ComboBox IsEditable="True" ItemsSource="{Binding ModelSuggestions}"
                                                       Text="{Binding ModelName, UpdateSourceTrigger=LostFocus}" />
                                         </StackPanel>
+                                        <StackPanel Grid.Column="2" Visibility="{Binding UsesDefault, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="How much may it change?" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                            <ComboBox ItemsSource="{x:Static ui:StylesViewModel.Strengths}" DisplayMemberPath="Label"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding Strength}" />
+                                        </StackPanel>
                                     </Grid>
-
-                                    <TextBlock Text="{Binding CloudNotice}" Foreground="#C77700" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
-                                               Visibility="{Binding IsCloud, Converter={StaticResource Visible}}" />
-
-                                    <TextBlock Text="{Binding DefaultNotice}" Style="{StaticResource Caption}" Margin="2,6,0,0"
-                                               Visibility="{Binding UsesDefault, Converter={StaticResource Visible}}" />
-
-                                    <StackPanel Visibility="{Binding UsesAi, Converter={StaticResource Visible}}">
-                                        <TextBlock Text="How much may it change?" Style="{StaticResource Caption}" Margin="0,10,0,4" />
+                                    <!-- With its own model, the strength gets a row of its own -->
+                                    <StackPanel Margin="0,10,0,0" Visibility="{Binding UsesOwnModel, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="How much may it change?" Style="{StaticResource Caption}" Margin="0,0,0,4" />
                                         <ComboBox ItemsSource="{x:Static ui:StylesViewModel.Strengths}" DisplayMemberPath="Label"
                                                   SelectedValuePath="Value" SelectedValue="{Binding Strength}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding DefaultNotice}" Style="{StaticResource Caption}" Margin="2,6,0,0" TextWrapping="Wrap"
+                                               Visibility="{Binding UsesDefault, Converter={StaticResource Visible}}" />
+                                    <TextBlock Text="{Binding CloudNotice}" Foreground="#C77700" FontSize="12" Margin="2,6,0,0" TextWrapping="Wrap"
+                                               Visibility="{Binding IsCloud, Converter={StaticResource Visible}}" />
 
-                                        <TextBlock Text="Your rules, in plain words" Style="{StaticResource Caption}" Margin="0,10,0,4" />
+                                    <StackPanel Visibility="{Binding UsesAi, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="Your rules, in plain words" Style="{StaticResource Caption}" Margin="0,14,0,4" />
                                         <TextBox Text="{Binding Instructions, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True"
-                                                 TextWrapping="Wrap" MinHeight="72" VerticalScrollBarVisibility="Auto" />
+                                                 TextWrapping="Wrap" MinHeight="84" VerticalScrollBarVisibility="Auto" />
                                     </StackPanel>
                                 </StackPanel>
 
+                                <!-- Where it is used -->
+                                <TextBlock Text="Used in" Style="{StaticResource SectionTitle}" Margin="0,24,0,8" />
+                                <ItemsControl ItemsSource="{Binding SelectedRules}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type ui:RuleViewModel}">
+                                            <Border CornerRadius="14" Padding="12,4,4,4" Margin="0,0,6,6" ToolTip="{Binding ChipTip}"
+                                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding ChipText}" VerticalAlignment="Center" />
+                                                    <Button Content="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10"
+                                                            Padding="6,4" Margin="6,0,0,0" Background="Transparent" BorderThickness="0"
+                                                            ToolTip="Remove" AutomationProperties.Name="{Binding ChipText, StringFormat='Remove {0}'}"
+                                                            Command="{Binding DataContext.RemoveRule, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Style="{StaticResource Caption}" Margin="2,0,0,8"
+                                           Visibility="{Binding NoSelectedRules, Converter={StaticResource Visible}}"
+                                           Text="No apps or websites yet." />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox ItemsSource="{x:Static ui:StylesViewModel.RuleKinds}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" SelectedValue="{Binding NewRuleKind}" MinWidth="110" />
+                                    <ComboBox Grid.Column="1" Margin="6,0" IsEditable="True" ItemsSource="{Binding MatchSuggestions}"
+                                              Text="{Binding NewRuleMatch, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="Pick an app you dictated into recently, or type a program name or words from a website's title" />
+                                    <Button Grid.Column="2" Content="Add" Command="{Binding AddRule}" MinWidth="64" />
+                                </Grid>
+                                <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0" TextWrapping="Wrap"
+                                           Text="Website rules match words in the window title (such as Gmail) and win over app rules. Apps you dictate into show up in the list." />
+
                                 <!-- Try it -->
-                                <TextBlock Text="Try it" Style="{StaticResource SectionTitle}" Margin="0,16,0,4" />
+                                <TextBlock Text="Try it" Style="{StaticResource SectionTitle}" Margin="0,24,0,8" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -1578,123 +1702,83 @@
                                               MinWidth="120" VerticalAlignment="Top"
                                               ToolTip="Type in: try a translation, as a key with this output language would (Keys page)" />
                                     <Button Grid.Column="2" Content="Try" Command="{Binding TryStyle}" Margin="8,0,0,0" MinWidth="64"
-                                            VerticalAlignment="Top" />
+                                            VerticalAlignment="Top" Style="{DynamicResource AccentButtonStyle}" />
                                 </Grid>
-                                <TextBlock Text="{Binding TryResult}" TextWrapping="Wrap" Margin="2,8,0,0" />
+                                <Border CornerRadius="8" Padding="12,10" Margin="0,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                        Visibility="{Binding TryResult, Converter={StaticResource EmptyToVisible}}">
+                                    <TextBlock Text="{Binding TryResult}" TextWrapping="Wrap" />
+                                </Border>
+
+                                <Button Content="Delete style" Command="{Binding DeleteStyle}" IsEnabled="{Binding CanDeleteSelected}"
+                                        HorizontalAlignment="Right" Margin="0,28,0,0" MinWidth="100"
+                                        ToolTip="Apps and websites that used it go back to the default style" />
                             </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- AI providers: a panel over the page, from the right -->
+                    <Grid Grid.RowSpan="2" Grid.ColumnSpan="3" Margin="0,0,-18,-16"
+                          Visibility="{Binding ShowProviders, Converter={StaticResource Visible}}">
+                        <Border Background="#33000000" MouseLeftButtonDown="ProvidersScrim_MouseDown" />
+                        <Border HorizontalAlignment="Right" Width="440" CornerRadius="12,0,0,12"
+                                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1,0,0,0">
+                            <DockPanel>
+                                <Grid DockPanel.Dock="Top" Margin="24,20,16,8">
+                                    <TextBlock Text="AI providers" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
+                                    <Button Content="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" HorizontalAlignment="Right"
+                                            Padding="8,6" Background="Transparent" BorderThickness="0" Command="{Binding ToggleProviders}"
+                                            ToolTip="Close" AutomationProperties.Name="Close AI providers" />
+                                </Grid>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,0,24,20">
+                                    <StackPanel>
+                                        <TextBlock Text="Default model, used by every style unless it picks another" Style="{StaticResource Caption}"
+                                                   Margin="0,0,0,4" TextWrapping="Wrap" />
+                                        <ComboBox ItemsSource="{x:Static ui:StylesViewModel.DefaultProviders}" DisplayMemberPath="Label"
+                                                  SelectedValuePath="Value" SelectedValue="{Binding DefaultProvider}" />
+                                        <ComboBox IsEditable="True" ItemsSource="{Binding DefaultModelSuggestions}"
+                                                  Text="{Binding DefaultModel, UpdateSourceTrigger=LostFocus}" Margin="0,8,0,0" />
+                                        <StackPanel Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,12,0,4" />
+                                            <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
+                                            <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                       Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
+                                        </StackPanel>
+
+                                        <TextBlock Text="Ollama, on this PC" Style="{StaticResource SectionTitle}" Margin="0,24,0,8" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Text="{Binding OllamaUrl, UpdateSourceTrigger=LostFocus}" ToolTip="Ollama address" />
+                                            <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshOllama}" Margin="8,0,0,0" />
+                                        </Grid>
+                                        <TextBlock Text="{Binding OllamaStatus}" Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap" />
+
+                                        <TextBlock Text="Cloud" Style="{StaticResource SectionTitle}" Margin="0,24,0,8" />
+                                        <TextBlock Text="OpenAI API key" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                        <PasswordBox x:Name="OpenAiKeyBox" LostFocus="OpenAiKeyBox_LostFocus" />
+                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding HasOpenAiKey, Converter={StaticResource Visible}}">
+                                            Key saved, encrypted for your Windows account. Type a new one to replace it, or
+                                            <Hyperlink Click="RemoveOpenAiKey_Click">remove it</Hyperlink>.
+                                        </TextBlock>
+
+                                        <TextBlock Text="Anthropic (Claude) API key" Style="{StaticResource Caption}" Margin="0,14,0,4" />
+                                        <PasswordBox x:Name="AnthropicKeyBox" LostFocus="AnthropicKeyBox_LostFocus" />
+                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding HasAnthropicKey, Converter={StaticResource Visible}}">
+                                            Key saved, encrypted for your Windows account. Type a new one to replace it, or
+                                            <Hyperlink Click="RemoveAnthropicKey_Click">remove it</Hyperlink>.
+                                        </TextBlock>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </DockPanel>
                         </Border>
-
-                        <!-- Where each style is used -->
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Text="Where to use them" Style="{StaticResource SectionTitle}" />
-                                <ItemsControl ItemsSource="{Binding Rules}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type ui:RuleViewModel}">
-                                            <Grid Margin="0,0,0,6">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="150" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                <ComboBox Grid.Column="1"
-                                                          ItemsSource="{Binding DataContext.Styles, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
-                                                          DisplayMemberPath="Name" SelectedValuePath="Model.Id" SelectedValue="{Binding StyleId}" />
-                                                <Button Grid.Column="2" Content="✕" Padding="8,2" Margin="6,0,0,0" Background="Transparent"
-                                                        BorderThickness="0" ToolTip="Remove"
-                                                        Command="{Binding DataContext.RemoveRule, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
-                                                        CommandParameter="{Binding}" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <Grid Margin="0,6,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="150" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="Everything else" VerticalAlignment="Center" FontWeight="SemiBold" />
-                                    <ComboBox Grid.Column="1" ItemsSource="{Binding Styles}" DisplayMemberPath="Name"
-                                              SelectedValuePath="Model.Id" SelectedValue="{Binding DefaultStyleId}" />
-                                </Grid>
-
-                                <TextBlock Text="Add a rule" Style="{StaticResource Caption}" Margin="0,14,0,4" />
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="120" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <ComboBox ItemsSource="{x:Static ui:StylesViewModel.RuleKinds}" DisplayMemberPath="Label"
-                                              SelectedValuePath="Value" SelectedValue="{Binding NewRuleKind}" MinWidth="90" />
-                                    <ComboBox Grid.Column="1" Margin="6,0" IsEditable="True" ItemsSource="{Binding MatchSuggestions}"
-                                              Text="{Binding NewRuleMatch, UpdateSourceTrigger=PropertyChanged}"
-                                              ToolTip="Pick an app you dictated into recently, or type a program name or words from a website's title" />
-                                    <ComboBox Grid.Column="2" ItemsSource="{Binding Styles}" DisplayMemberPath="Name"
-                                              SelectedValuePath="Model.Id" SelectedValue="{Binding NewRuleStyleId}" />
-                                    <Button Grid.Column="3" Content="Add" Command="{Binding AddRule}" Margin="6,0,0,0" MinWidth="56" />
-                                </Grid>
-                                <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
-                                           Text="Website rules match words in the window title (e.g. Gmail) and win over app rules. Apps you dictate into show up in the list." />
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Providers -->
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Text="AI providers" Style="{StaticResource SectionTitle}" />
-
-                                <TextBlock Text="Default model, used by every style unless it picks another" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <ComboBox ItemsSource="{x:Static ui:StylesViewModel.DefaultProviders}" DisplayMemberPath="Label"
-                                              SelectedValuePath="Value" SelectedValue="{Binding DefaultProvider}" Margin="0,0,6,0" />
-                                    <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding DefaultModelSuggestions}"
-                                              Text="{Binding DefaultModel, UpdateSourceTrigger=LostFocus}" Margin="6,0,0,0" />
-                                </Grid>
-                                <StackPanel Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
-                                    <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,10,0,4" />
-                                    <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
-                                              SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
-                                    <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0"
-                                               Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
-                                </StackPanel>
-
-                                <TextBlock Text="Ollama address" Style="{StaticResource Caption}" Margin="0,14,0,4" />
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox Text="{Binding OllamaUrl, UpdateSourceTrigger=LostFocus}" />
-                                    <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshOllama}" Margin="8,0,0,0" />
-                                </Grid>
-                                <TextBlock Text="{Binding OllamaStatus}" Style="{StaticResource Caption}" Margin="2,4,0,0" />
-
-                                <TextBlock Text="OpenAI API key" Style="{StaticResource Caption}" Margin="0,12,0,4" />
-                                <PasswordBox x:Name="OpenAiKeyBox" LostFocus="OpenAiKeyBox_LostFocus" />
-                                <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" Visibility="{Binding HasOpenAiKey, Converter={StaticResource Visible}}">
-                                    Key saved, encrypted for your Windows account. Type a new one to replace it, or
-                                    <Hyperlink Click="RemoveOpenAiKey_Click">remove it</Hyperlink>.
-                                </TextBlock>
-
-                                <TextBlock Text="Anthropic (Claude) API key" Style="{StaticResource Caption}" Margin="0,12,0,4" />
-                                <PasswordBox x:Name="AnthropicKeyBox" LostFocus="AnthropicKeyBox_LostFocus" />
-                                <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" Visibility="{Binding HasAnthropicKey, Converter={StaticResource Visible}}">
-                                    Key saved, encrypted for your Windows account. Type a new one to replace it, or
-                                    <Hyperlink Click="RemoveAnthropicKey_Click">remove it</Hyperlink>.
-                                </TextBlock>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
+                    </Grid>
+                </Grid>
             </TabItem>
 
             <!-- Settings -->

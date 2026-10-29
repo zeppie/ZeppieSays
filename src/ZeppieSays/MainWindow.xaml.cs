@@ -260,6 +260,9 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>Clicking beside the AI providers panel closes it.</summary>
+    void ProvidersScrim_MouseDown(object sender, MouseButtonEventArgs e) => Model.Styles.ShowProviders = false;
+
     // API keys go straight from the password box into encrypted storage; they are never shown again.
     void OpenAiKeyBox_LostFocus(object sender, RoutedEventArgs e) => SaveKey((PasswordBox)sender, Model.Styles.SetOpenAiKey);
     void AnthropicKeyBox_LostFocus(object sender, RoutedEventArgs e) => SaveKey((PasswordBox)sender, Model.Styles.SetAnthropicKey);
