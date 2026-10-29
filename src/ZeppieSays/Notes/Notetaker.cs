@@ -309,7 +309,7 @@ public sealed partial class Notetaker : IDisposable
             await LearnVoicesForAsync(transcript.VoiceModel, options, Report);
             var turns = recording is null
                 ? await FileTurnsAsync(tracks[0], options, transcript, Report, ct)
-                : await MeetingTurnsAsync(tracks[0], tracks[1], options, transcript, Report, ct);
+                : await MeetingTurnsAsync(tracks[0], tracks[1], recording, options, transcript, Report, ct);
 
             // A meeting recording is named after who it was with, unless the user gave it a title.
             string? newName = null;
@@ -404,29 +404,51 @@ public sealed partial class Notetaker : IDisposable
     /// A two-track meeting recording: everything on the microphone track is the user (minus echo of the call),
     /// and only the call track needs speaker detection.
     /// </summary>
-    async Task<List<Turn>> MeetingTurnsAsync(float[] mic, float[] call, NoteOptions options, Transcript transcript,
-        Action<string, double> report, CancellationToken ct)
+    async Task<List<Turn>> MeetingTurnsAsync(float[] mic, float[] call, RecordingInfo recording, NoteOptions options,
+        Transcript transcript, Action<string, double> report, CancellationToken ct)
     {
         var me = UserName.First is { Length: > 0 } first ? first : "You";
         var mine = AudioFile.SpeechRegions(mic, call);
         var turns = mine.Select(r => new Turn(mic, r.Start, r.End, me)).ToList();
 
-        // The people-count setting includes the user, who is on the other track.
-        var others = options.SpeakerCount > 1 ? options.SpeakerCount - 1 : 0;
+        // A Teams call with one other person: everything on the call track is them. No guessing at voices, and
+        // their voice is learned, so they're recognised in other recordings too.
+        if (OnlyOtherPerson(recording) is { } other)
+        {
+            var theirs = AudioFile.SpeechRegions(call);
+            turns.AddRange(theirs.Select(r => new Turn(call, r.Start, r.End, other)));
+            await LearnVoiceAsync(other, call, theirs, transcript, ct);
+            await LearnVoiceAsync(me, mic, mine, transcript, ct);
+            return [.. turns.OrderBy(t => t.Start)];
+        }
+
+        // The people-count setting includes the user, who is on the other track. Without one, the people Teams
+        // showed in the call are the count.
+        var others = options.SpeakerCount > 1 ? options.SpeakerCount - 1 : recording.Participants.Count > 1 ? recording.Participants.Count : 0;
         if (options.LabelSpeakers && await FindSpeakersAsync(call, others, options.Speaker, transcript.VoiceModel, report, ct) is { } speakers)
             turns.AddRange(await NameSpeakersAsync(call, speakers, transcript, report, ct));
         else
             turns.AddRange(AudioFile.SpeechRegions(call).Select(r => new Turn(call, r.Start, r.End, "Others")));
 
-        // The user's own voice, learned from every meeting with enough of it, so they are recognised in ordinary
-        // recordings too. A few words make a poor voiceprint that would weigh on the average for a long time.
-        var spoken = mine.Sum(r => r.End - r.Start) / (double)Audio.SampleRate;
-        if (me != "You" && spoken >= 20 && await Task.Run(() => VoiceLibrary.Voiceprint(transcript.VoiceModel, mic, mine), ct) is { } voice)
-        {
-            _voices.Remember(transcript.VoiceModel, me, voice);
-            transcript.Voiceprints[me] = voice;
-        }
+        await LearnVoiceAsync(me, mic, mine, transcript, ct);
         return [.. turns.OrderBy(t => t.Start)];
+    }
+
+    /// <summary>The other person in a Teams call between two people, when Teams showed exactly one; otherwise null.</summary>
+    public static string? OnlyOtherPerson(RecordingInfo recording) =>
+        recording is { OneToOneCall: true, Participants.Count: 1 } ? recording.Participants[0] : null;
+
+    /// <summary>
+    /// Learns a voice from a meeting with enough of it (a few words make a poor voiceprint that would weigh on the
+    /// average for a long time), and keeps it with the transcript. "You" names no one and is left out.
+    /// </summary>
+    async Task LearnVoiceAsync(string name, float[] track, IReadOnlyList<(int Start, int End)> speech, Transcript transcript, CancellationToken ct)
+    {
+        var spoken = speech.Sum(r => r.End - r.Start) / (double)Audio.SampleRate;
+        if (name == "You" || spoken < 20) return;
+        if (await Task.Run(() => VoiceLibrary.Voiceprint(transcript.VoiceModel, track, speech), ct) is not { } voice) return;
+        _voices.Remember(transcript.VoiceModel, name, voice);
+        transcript.Voiceprints[name] = voice;
     }
 
     /// <summary>The voice model chosen in Settings.</summary>
@@ -633,6 +655,8 @@ public sealed partial class Notetaker : IDisposable
     /// </summary>
     public static string? MeetingName(RecordingInfo recording, IEnumerable<string?> callSpeakers)
     {
+        if (OnlyOtherPerson(recording) is { } other) return $"Call with {other}"; // Teams said who
+
         var people = callSpeakers.OfType<string>().Where(s => s != "Others").Distinct().ToList();
         var window = recording.CallTitle is { Length: > 0 } title ? title : null;
         if (people.Count == 1)

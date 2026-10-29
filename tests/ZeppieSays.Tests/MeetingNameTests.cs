@@ -43,6 +43,52 @@ public class MeetingNameTests
         Assert.Null(Notetaker.MeetingName(Teams(null), ["Anna", "Speaker 1"]));
     }
 
+    // As Teams (in Dutch) shows a call between two people: call-only buttons, your tile and theirs.
+    static readonly (string, string, string)[] DutchCall =
+    [
+        ("Button", "Doorverbinden", "transfer-button"),
+        ("Button", "Wachtstand", "hold-button"),
+        ("Button", "Personen", "roster-button"),
+        ("Button", "Microfoon dempen", "microphone-button"),
+        ("Image", "Video over mezelf, Dirk Vaessen, Niet gedempt, video is ingeschakeld, Frame vullen, Heeft contextmenu", "menurc12"),
+        ("MenuItem", "Anna de Vries, video is ingeschakeld, Contextmenu beschikbaar", ""),
+    ];
+
+    [Fact]
+    public void Reads_who_is_in_a_Teams_call_between_two_people()
+    {
+        var call = TeamsWindow.ParseCall(DutchCall);
+        Assert.True(call.OneToOne);
+        Assert.Equal(["Anna de Vries"], call.Others); // not you
+    }
+
+    [Fact]
+    public void A_meeting_has_no_call_buttons_and_can_have_several_people()
+    {
+        var call = TeamsWindow.ParseCall(
+        [
+            ("Button", "Personen", "roster-button"),
+            ("Image", "Video of yourself, Dirk Vaessen, Unmuted, video is on", "menurc1"),
+            ("MenuItem", "Anna de Vries, video is off, Muted", ""),
+            ("MenuItem", "Bram Jansen, video is on", ""),
+            ("MenuItem", "Bram Jansen, video is on", ""), // the same tile seen twice
+            ("Button", "Microfoon dempen", "microphone-button"),
+        ]);
+        Assert.False(call.OneToOne);
+        Assert.Equal(["Anna de Vries", "Bram Jansen"], call.Others);
+    }
+
+    [Fact]
+    public void A_call_with_one_person_Teams_named_is_named_after_them_whatever_the_voices()
+    {
+        var info = new RecordingInfo { App = "Teams", CallTitle = "Anna de Vries", OneToOneCall = true, Participants = ["Anna de Vries"] };
+        Assert.Equal("Anna de Vries", Notetaker.OnlyOtherPerson(info));
+        Assert.Equal("Call with Anna de Vries", Notetaker.MeetingName(info, ["Speaker 1", "Speaker 2"]));
+
+        info.Participants.Add("Bram Jansen"); // someone joined: no longer a two-person call
+        Assert.Null(Notetaker.OnlyOtherPerson(info));
+    }
+
     [Fact]
     public void Knows_which_meeting_app_a_process_belongs_to()
     {

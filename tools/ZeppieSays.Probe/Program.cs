@@ -145,6 +145,54 @@ switch (args.FirstOrDefault())
         break;
     }
 
+    case "teams-call": // probe teams-call  — what the recorder reads from Teams' call window (counts only, no names)
+    {
+        for (var attempt = 1; attempt <= 2; attempt++) // the first read may only wake up Teams' accessibility tree
+        {
+            var call = ZeppieSays.Notes.TeamsWindow.ReadCall();
+            Console.WriteLine(call is null ? $"read {attempt}: no call window"
+                : $"read {attempt}: call between two people: {call.OneToOne}, other people: {call.Others.Count}, " +
+                  $"name matches the window title: {call.Others.Contains(ZeppieSays.Notes.TeamsWindow.CallTitle() ?? "")}");
+            await Task.Delay(3000);
+        }
+        break;
+    }
+
+    case "teams-tree": // probe teams-tree <out file>  — every Teams window's accessibility tree, to learn how a call shows its people
+    {
+        var ids = Process.GetProcessesByName("ms-teams").Concat(Process.GetProcessesByName("Teams")).Select(p => p.Id).ToHashSet();
+        var desktop = System.Windows.Automation.AutomationElement.RootElement;
+        var condition = System.Windows.Automation.Condition.TrueCondition;
+        List<System.Windows.Automation.AutomationElement> Windows() =>
+            desktop.FindAll(System.Windows.Automation.TreeScope.Children, condition).Cast<System.Windows.Automation.AutomationElement>()
+                .Where(w => ids.Contains(w.Current.ProcessId)).ToList();
+        // Teams (a web view) only fills in its tree once something asks for it: ask, wait, then read.
+        foreach (var w in Windows()) w.FindAll(System.Windows.Automation.TreeScope.Descendants, condition);
+        await Task.Delay(3000);
+
+        var walker = System.Windows.Automation.TreeWalker.ControlViewWalker;
+        var lines = new List<string>();
+        void Walk(System.Windows.Automation.AutomationElement element, int depth)
+        {
+            if (depth > 60 || lines.Count > 20000) return;
+            var c = element.Current;
+            var name = c.Name.Replace('\n', ' ');
+            if (name.Length > 160) name = name[..160] + "…";
+            lines.Add($"{new string(' ', depth * 2)}{c.ControlType.ProgrammaticName.Replace("ControlType.", "")} \"{name}\"" +
+                      (c.AutomationId.Length > 0 ? $" id={c.AutomationId}" : "") + (c.ClassName.Length > 0 ? $" class={c.ClassName}" : ""));
+            for (var child = walker.GetFirstChild(element); child is not null; child = walker.GetNextSibling(child))
+                Walk(child, depth + 1);
+        }
+        foreach (var w in Windows())
+        {
+            lines.Add($"===== window \"{w.Current.Name}\"");
+            Walk(w, 0);
+        }
+        File.WriteAllLines(args[1], lines);
+        Console.WriteLine($"{Windows().Count} Teams windows, {lines.Count} lines written to {args[1]}");
+        break;
+    }
+
     case "devices": // probe devices  — output devices, the defaults, and which programs have sound on each
     {
         using var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator();

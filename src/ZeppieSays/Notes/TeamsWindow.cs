@@ -5,6 +5,9 @@ using System.Text;
 
 namespace ZeppieSays.Notes;
 
+/// <summary>What Teams' call window shows: a call between two people (not a meeting), and the other people in it.</summary>
+public sealed record TeamsCall(bool OneToOne, IReadOnlyList<string> Others);
+
 /// <summary>
 /// Who or what a Teams call is about, from Teams' own window titles. The main window reads
 /// "Chat | Esmee van der Made | Microsoft Teams" (a section first); a call or meeting gets a window of its own,
@@ -32,6 +35,60 @@ public static class TeamsWindow
             return Clean(name);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Who is in the Teams call, from the call window's accessibility tree (what a screen reader sees); null when
+    /// there's no call window. Teams fills in that tree only once something asks, so the first read may be empty.
+    /// </summary>
+    public static TeamsCall? ReadCall()
+    {
+        try
+        {
+            var ids = Process.GetProcessesByName("ms-teams").Concat(Process.GetProcessesByName("Teams")).Select(p => p.Id).ToHashSet();
+            if (ids.Count == 0) return null;
+            var any = System.Windows.Automation.Condition.TrueCondition;
+            var window = System.Windows.Automation.AutomationElement.RootElement
+                .FindAll(System.Windows.Automation.TreeScope.Children, any).Cast<System.Windows.Automation.AutomationElement>()
+                .FirstOrDefault(w => ids.Contains(w.Current.ProcessId) && CallTitle([w.Current.Name]) is not null);
+            if (window is null) return null;
+            var elements = window.FindAll(System.Windows.Automation.TreeScope.Descendants, any).Cast<System.Windows.Automation.AutomationElement>()
+                .Select(e => e.Current)
+                .Select(c => (c.ControlType.ProgrammaticName.Replace("ControlType.", ""), c.Name, c.AutomationId));
+            return ParseCall(elements);
+        }
+        catch
+        {
+            return null; // the call goes on being recorded; only the names are missing
+        }
+    }
+
+    /// <summary>Buttons only a call between two people has, not a meeting; their ids don't change with Teams' language.</summary>
+    static readonly string[] CallOnlyButtons = ["transfer-button", "consultative-transfer-button", "hold-button", "dialpad-button"];
+
+    /// <summary>How Teams labels your own video tile ("Video over mezelf, Dirk Vaessen, …").</summary>
+    static readonly string[] Yourself = ["mezelf", "yourself", "myself"];
+
+    /// <summary>
+    /// The call from the elements of its window: whether it is a call between two people, and the other people's
+    /// names. Each person has a video tile named "Kaz Schellekens, video is ingeschakeld, …", with or without
+    /// their camera on; yours starts with "Video over mezelf".
+    /// </summary>
+    public static TeamsCall ParseCall(IEnumerable<(string ControlType, string Name, string AutomationId)> elements)
+    {
+        var oneToOne = false;
+        var others = new List<string>();
+        foreach (var (type, name, id) in elements)
+        {
+            if (CallOnlyButtons.Contains(id)) oneToOne = true;
+            if (type is not ("Image" or "MenuItem" or "ListItem" or "Button")) continue;
+            var parts = name.Split(", ", StringSplitOptions.TrimEntries);
+            if (parts.Length < 2 || !parts.Skip(1).Any(p => p.Contains("video", StringComparison.OrdinalIgnoreCase))) continue;
+            if (Yourself.Any(y => parts[0].Contains(y, StringComparison.OrdinalIgnoreCase))) continue;
+            var person = Clean(parts[0]);
+            if (person.Length > 0 && !others.Contains(person)) others.Add(person);
+        }
+        return new TeamsCall(oneToOne, others);
     }
 
     /// <summary>Safe as part of a file name, and not absurdly long.</summary>

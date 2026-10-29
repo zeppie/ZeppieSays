@@ -19,6 +19,10 @@ public sealed class RecordingInfo
     public bool MicLeftCallRight { get; set; } = true;
     /// <summary>What the Teams call window was called (a person, or a meeting's subject); null when unknown.</summary>
     public string? CallTitle { get; set; }
+    /// <summary>Teams showed a call between two people (with transfer and hold), not a meeting.</summary>
+    public bool OneToOneCall { get; set; }
+    /// <summary>The other people Teams showed in the call, everyone seen at any point; empty when unknown.</summary>
+    public List<string> Participants { get; set; } = [];
 
     public static string PathFor(string audioPath) => audioPath + ".recording.json";
 
@@ -112,20 +116,37 @@ public sealed class MeetingRecorder : IDisposable
             _loopback.StartRecording();
             _flush = new Timer(_ => Flush(final: false), null, 1000, 1000);
             // Who the call is with, for naming it afterwards. The call window may open a moment after the microphone.
-            if (app == "Teams") _callWatch = new Timer(_ => NoteCallTitle(), null, 0, 5000);
+            if (app == "Teams") _callWatch = new Timer(_ => NoteCall(), null, 0, 5000);
             Log.Info($"Recording {FileName(_info)}: mic '{micDevice.FriendlyName}', call audio from '{speakerDevice.FriendlyName}'" +
                      (source is null ? "" : $" ({source} plays there)"));
         }
     }
 
-    void NoteCallTitle()
+    int _callReads;
+
+    /// <summary>
+    /// Notes the call window's title, and every other read who is in the call: one person or more, and their
+    /// names, so the call can be labelled without guessing at voices.
+    /// </summary>
+    void NoteCall()
     {
-        if (TeamsWindow.CallTitle() is not { } title) return;
+        var title = TeamsWindow.CallTitle();
+        var call = _callReads++ % 2 == 0 ? TeamsWindow.ReadCall() : null; // every 10 seconds; it reads the whole window
         lock (_lock)
         {
-            if (_info is null || !IsRecording || _info.CallTitle == title) return;
-            _info.CallTitle = title;
-            Log.Info($"Teams call window noted ({title.Length} chars)"); // not the name itself: the log stays free of who you talk to
+            if (_info is null || !IsRecording) return;
+            if (title is not null && _info.CallTitle != title)
+            {
+                _info.CallTitle = title;
+                Log.Info($"Teams call window noted ({title.Length} chars)"); // not the name itself: the log stays free of who you talk to
+            }
+            if (call is null) return;
+            var known = _info.Participants.Count;
+            foreach (var person in call.Others.Where(p => !_info.Participants.Contains(p))) _info.Participants.Add(person);
+            if (call.OneToOne && !_info.OneToOneCall) _info.OneToOneCall = true;
+            if (_info.Participants.Count != known)
+                Log.Info($"Teams call: {_info.Participants.Count} other {(_info.Participants.Count == 1 ? "person" : "people")} seen" +
+                         (_info.OneToOneCall ? ", a call between two people" : ""));
         }
     }
 
