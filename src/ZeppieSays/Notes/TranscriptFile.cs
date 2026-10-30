@@ -63,6 +63,16 @@ public static partial class TranscriptFile
         return text.ToString();
     }
 
+    /// <summary>The same file with another title in its "# " heading, or one added at the top when it has none.</summary>
+    public static string WithTitle(string markdown, string title)
+    {
+        var lines = markdown.Replace("\r\n", "\n").Split('\n').ToList();
+        var heading = lines.FindIndex(l => l.StartsWith("# ", StringComparison.Ordinal));
+        if (heading >= 0) lines[heading] = $"# {title}";
+        else lines.InsertRange(0, [$"# {title}", ""]);
+        return string.Join("\n", lines);
+    }
+
     /// <summary>The same file with a new summary (or none), written between the details line and the transcript.</summary>
     public static string WithNotes(string markdown, string? notes)
     {

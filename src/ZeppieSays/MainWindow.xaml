@@ -737,7 +737,8 @@
                                  ScrollViewer.HorizontalScrollBarVisibility="Hidden" ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                  ScrollViewer.CanContentScroll="False" SizeChanged="JobStrip_SizeChanged"
                                  PreviewMouseWheel="JobStrip_PreviewMouseWheel" PreviewMouseLeftButtonDown="JobStrip_PreviewMouseDown"
-                                 PreviewMouseMove="JobStrip_PreviewMouseMove" PreviewMouseLeftButtonUp="JobStrip_PreviewMouseUp">
+                                 PreviewMouseMove="JobStrip_PreviewMouseMove" PreviewMouseLeftButtonUp="JobStrip_PreviewMouseUp"
+                                 KeyDown="JobStrip_KeyDown">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <VirtualizingStackPanel Orientation="Horizontal" />
@@ -776,14 +777,29 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
+                                        <Grid.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Rename" InputGestureText="F2" Click="RenameJob_Click"
+                                                          IsEnabled="{Binding IsDone}" />
+                                            </ContextMenu>
+                                        </Grid.ContextMenu>
                                         <Border Width="36" Height="36" CornerRadius="10" Background="{StaticResource AccentSoft}" VerticalAlignment="Center">
                                             <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Accent}" />
                                         </Border>
+                                        <!-- The name on up to two lines, then when and how far -->
                                         <StackPanel Grid.Column="1" Margin="10,0,6,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
-                                            <TextBlock Text="{Binding StatusText}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis"
-                                                       TextWrapping="NoWrap" ToolTip="{Binding StatusText}" />
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                                       LineStackingStrategy="BlockLineHeight" LineHeight="18" MaxHeight="36" ToolTip="{Binding Name}" />
+                                            <TextBlock Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"
+                                                       TextWrapping="NoWrap" ToolTip="{Binding StatusText}">
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0} · {1}">
+                                                        <Binding Path="Date" />
+                                                        <Binding Path="StatusText" />
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
                                             <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="0,5,0,0"
                                                          Foreground="{StaticResource Accent}"
                                                          IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
@@ -1002,8 +1018,33 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="*" />
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="{Binding Selected.Name}" Foreground="#E6E8EC" FontSize="14" FontWeight="SemiBold"
-                                                       TextTrimming="CharacterEllipsis" />
+                                            <!-- The recording's name: click it to rename the recording and its transcript -->
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Selected.Date}" Foreground="#9AA0AA" FontSize="12"
+                                                           VerticalAlignment="Center" Margin="12,0,0,0" />
+                                                <TextBox x:Name="RecordingTitle" Text="{Binding SelectedTitle, UpdateSourceTrigger=LostFocus}"
+                                                         Foreground="#E6E8EC" CaretBrush="#E6E8EC" FontSize="14" FontWeight="SemiBold"
+                                                         Background="Transparent" BorderThickness="0,0,0,1" BorderBrush="Transparent" Padding="0,2"
+                                                         MinWidth="0" HorizontalAlignment="Left" KeyDown="RecordingTitle_KeyDown"
+                                                         ToolTip="Click to rename (F2). Renames the recording, its transcript and the files with them."
+                                                         AutomationProperties.Name="Recording name">
+                                                    <TextBox.Template>
+                                                        <ControlTemplate TargetType="TextBox">
+                                                            <Border x:Name="Line" BorderThickness="0,0,0,1" BorderBrush="Transparent" Padding="{TemplateBinding Padding}">
+                                                                <ScrollViewer x:Name="PART_ContentHost" />
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Line" Property="BorderBrush" Value="#5A606B" />
+                                                                </Trigger>
+                                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                    <Setter TargetName="Line" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </TextBox.Template>
+                                                </TextBox>
+                                            </DockPanel>
                                             <ui:WaveformView Grid.Row="1" Margin="0,10,0,0" Peaks="{Binding Peaks}" Duration="{Binding Duration}"
                                                              Segments="{Binding WaveSegments}"
                                                              Position="{Binding Playback.Position}" SeekCommand="{Binding SeekCommand}" />

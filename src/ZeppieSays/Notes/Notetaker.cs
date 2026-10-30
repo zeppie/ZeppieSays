@@ -11,10 +11,41 @@ namespace ZeppieSays.Notes;
 public enum NoteStatus { Waiting, Working, Done, Failed, Ready }
 
 /// <summary>One audio file in the Notetaker list, from waiting in the folder to a finished transcript.</summary>
-public sealed class NoteJob(string audioPath) : ObservableObject
+public sealed partial class NoteJob(string audioPath) : ObservableObject
 {
-    public string AudioPath { get; set; } = audioPath;
+    public string AudioPath
+    {
+        get => _audioPath;
+        set { if (Set(ref _audioPath, value)) { Raise(nameof(Name)); Raise(nameof(Title)); Raise(nameof(Date)); } }
+    }
+    string _audioPath = audioPath;
+
     public string Name => Path.GetFileNameWithoutExtension(AudioPath);
+
+    /// <summary>The name without the date and time a recording's name ends in: "Niels Nissen" for "Niels Nissen 2026-10-30 10.44".</summary>
+    public string Title => SplitName(Name).Title;
+
+    /// <summary>"30 Oct 10:44" from the end of the name, or the file's time when the name has none.</summary>
+    public string Date => (SplitName(Name).Date ?? When).ToString("d MMM HH:mm", System.Globalization.CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// A name such as "Call with Niels Nissen 2026-10-30 10.44" in its title and its date. Older recordings were
+    /// named "Call with …"; the title leaves that out, as every recording here is a call.
+    /// </summary>
+    public static (string Title, DateTime? Date) SplitName(string name)
+    {
+        var match = DatedName().Match(name);
+        var title = match.Success ? match.Groups["title"].Value : name;
+        DateTime? date = match.Success && DateTime.TryParseExact(match.Groups["date"].Value, "yyyy-MM-dd HH.mm",
+            System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+        if (title.StartsWith(CallWith, StringComparison.OrdinalIgnoreCase) && title.Length > CallWith.Length) title = title[CallWith.Length..];
+        return (title.Length > 0 ? title : name, date);
+    }
+
+    const string CallWith = "Call with ";
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^(?<title>.*?) ?(?<date>\d{4}-\d{2}-\d{2} \d{2}\.\d{2})(?: \(\d+\))?$")]
+    private static partial System.Text.RegularExpressions.Regex DatedName();
 
     /// <summary>Settings for this file alone; null means the general Notetaker settings at the time it runs.</summary>
     public NoteOptions? Options { get; set; }
@@ -33,7 +64,8 @@ public sealed class NoteJob(string audioPath) : ObservableObject
     public string? TranscriptPath { get => _transcriptPath; set => Set(ref _transcriptPath, value); }
     string? _transcriptPath;
 
-    public DateTime When { get; set; } = DateTime.Now;
+    public DateTime When { get => _when; set { if (Set(ref _when, value)) Raise(nameof(Date)); } }
+    DateTime _when = DateTime.Now;
 
     /// <summary>A finished transcript waiting to be done again with other (speaker) settings; see <see cref="Notetaker.Redo"/>.</summary>
     public bool IsRedo { get => _isRedo; set => Set(ref _isRedo, value); }
@@ -649,22 +681,73 @@ public sealed partial class Notetaker : IDisposable
     }
 
     /// <summary>
-    /// A name for a meeting recording from who spoke on the call track: "Call with Esmee van der Made" when it was
-    /// one other person (their voice from the library, else the Teams call window), the call window's title (a
-    /// meeting's subject) when it was more, or null to keep the recording's own name.
+    /// A name for a meeting recording from who spoke on the call track: "Esmee van der Made" when it was one other
+    /// person (their voice from the library, else the Teams call window), the call window's title (a meeting's
+    /// subject) when it was more, or null to keep the recording's own name.
     /// </summary>
     public static string? MeetingName(RecordingInfo recording, IEnumerable<string?> callSpeakers)
     {
-        if (OnlyOtherPerson(recording) is { } other) return $"Call with {other}"; // Teams said who
+        if (OnlyOtherPerson(recording) is { } other) return other; // Teams said who
 
         var people = callSpeakers.OfType<string>().Where(s => s != "Others").Distinct().ToList();
         var window = recording.CallTitle is { Length: > 0 } title ? title : null;
-        if (people.Count == 1)
-        {
-            var name = GenericSpeaker().IsMatch(people[0]) ? window : people[0];
-            return name is null ? null : $"Call with {name}";
-        }
+        if (people.Count == 1) return GenericSpeaker().IsMatch(people[0]) ? window : people[0];
         return window;
+    }
+
+    /// <summary>
+    /// Gives a finished recording another name: the audio, the transcript and everything kept with them are renamed
+    /// together, keeping the date and time at the end, and the transcript's heading becomes the new title. False
+    /// when a file couldn't be renamed (open somewhere else); what was renamed by then is put back.
+    /// </summary>
+    public bool Rename(NoteJob job, string title)
+    {
+        title = TeamsWindow.Clean(title.Trim());
+        if (!job.IsDone || title.Length == 0 || title == job.Title) return false;
+        var (_, date) = NoteJob.SplitName(job.Name);
+        var dir = Path.GetDirectoryName(job.AudioPath)!;
+        var stem = date is { } d ? $"{title} {d:yyyy-MM-dd HH.mm}" : title;
+        var audio = Path.Combine(dir, stem + Path.GetExtension(job.AudioPath));
+        if (!audio.Equals(job.AudioPath, StringComparison.OrdinalIgnoreCase)) // only the case changes: the same file
+            audio = UniquePath(dir, Path.GetFileName(audio));
+        stem = Path.GetFileNameWithoutExtension(audio);
+        var oldStem = job.Name;
+
+        // Every file whose name starts with the old name, given the new one; the transcript's backups too.
+        var moves = FilesOf(job).Distinct(StringComparer.OrdinalIgnoreCase) // a transcript without its audio is listed twice
+            .Select(f => (From: f, To: Path.Combine(Path.GetDirectoryName(f)!, stem + Path.GetFileName(f)[oldStem.Length..])))
+            .Where(m => Path.GetFileName(m.From).StartsWith(oldStem, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var done = new List<(string From, string To)>();
+        try
+        {
+            foreach (var move in moves)
+            {
+                if (Directory.Exists(move.From)) Directory.Move(move.From, move.To);
+                else File.Move(move.From, move.To);
+                done.Add(move);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"Could not rename a recording: {e.Message}");
+            foreach (var (from, to) in Enumerable.Reverse(done))
+                try { if (Directory.Exists(to)) Directory.Move(to, from); else File.Move(to, from); }
+                catch (Exception back) { Log.Warn($"Could not put {to} back: {back.Message}"); }
+            return false;
+        }
+
+        var markdown = job.TranscriptPath is { } md ? Path.Combine(Path.GetDirectoryName(md)!, stem + ".md") : null;
+        if (markdown is not null && File.Exists(markdown))
+        {
+            try { File.WriteAllText(markdown, TranscriptFile.WithTitle(File.ReadAllText(markdown), title)); }
+            catch (Exception e) { Log.Warn($"Could not write the new title into the transcript: {e.Message}"); }
+        }
+        job.AudioPath = File.Exists(audio) ? audio : markdown ?? audio;
+        job.TranscriptPath = null; // a change even when only the case differs, so the page loads it again
+        job.TranscriptPath = markdown;
+        Log.Info($"Renamed a recording ({moves.Count} files and folders)");
+        return true;
     }
 
     [System.Text.RegularExpressions.GeneratedRegex(@"^Speaker \d+$")]

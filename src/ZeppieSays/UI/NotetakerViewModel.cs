@@ -257,6 +257,31 @@ public sealed partial class NotetakerViewModel : ObservableObject
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
     }
 
+    /// <summary>
+    /// The selected recording's name, without its date; typing another one renames the recording, its transcript
+    /// and everything kept with them.
+    /// </summary>
+    public string SelectedTitle
+    {
+        get => Selected?.Title ?? "";
+        set
+        {
+            if (Selected is not { IsDone: true } job || value.Trim().Length == 0 || value.Trim() == job.Title)
+            {
+                Raise(); // an empty name puts the current one back
+                return;
+            }
+            Playback.Close(); // the player holds the audio open; the page loads it again once renamed
+            if (!_notetaker.Rename(job, value))
+            {
+                LoadSelected();
+                System.Windows.MessageBox.Show("Could not rename this recording. Is a file of it open somewhere else?", "Zeppie Says",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+            Raise();
+        }
+    }
+
     // ---- The selected recording.
 
     public NoteJob? Selected
@@ -268,6 +293,7 @@ public sealed partial class NotetakerViewModel : ObservableObject
             LoadSelected();
             RaisePlaceholder();
             Raise(nameof(SelectedSpeakerDetection));
+            Raise(nameof(SelectedTitle));
         }
     }
     NoteJob? _selected;

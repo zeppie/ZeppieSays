@@ -26,13 +26,13 @@ public class MeetingNameTests
     [Fact]
     public void A_call_with_one_known_voice_is_named_after_them()
     {
-        Assert.Equal("Call with Anna", Notetaker.MeetingName(Teams("Weekly sync"), ["Anna", "Anna", null]));
+        Assert.Equal("Anna", Notetaker.MeetingName(Teams("Weekly sync"), ["Anna", "Anna", null]));
     }
 
     [Fact]
     public void A_call_with_one_unknown_voice_takes_the_name_from_the_call_window()
     {
-        Assert.Equal("Call with Esmee van der Made", Notetaker.MeetingName(Teams("Esmee van der Made"), ["Speaker 1"]));
+        Assert.Equal("Esmee van der Made", Notetaker.MeetingName(Teams("Esmee van der Made"), ["Speaker 1"]));
         Assert.Null(Notetaker.MeetingName(Teams(null), ["Speaker 1"])); // nothing to go on: keep the recording's own name
     }
 
@@ -83,10 +83,30 @@ public class MeetingNameTests
     {
         var info = new RecordingInfo { App = "Teams", CallTitle = "Anna de Vries", OneToOneCall = true, Participants = ["Anna de Vries"] };
         Assert.Equal("Anna de Vries", Notetaker.OnlyOtherPerson(info));
-        Assert.Equal("Call with Anna de Vries", Notetaker.MeetingName(info, ["Speaker 1", "Speaker 2"]));
+        Assert.Equal("Anna de Vries", Notetaker.MeetingName(info, ["Speaker 1", "Speaker 2"]));
 
         info.Participants.Add("Bram Jansen"); // someone joined: no longer a two-person call
         Assert.Null(Notetaker.OnlyOtherPerson(info));
+    }
+
+    [Fact]
+    public void A_recording_name_splits_into_its_title_and_date()
+    {
+        Assert.Equal(("Niels Nissen", new DateTime(2026, 10, 30, 10, 44, 0)), NoteJob.SplitName("Niels Nissen 2026-10-30 10.44"));
+        Assert.Equal("Niels Nissen", NoteJob.SplitName("Call with Niels Nissen 2026-10-30 10.44").Title); // as older calls were named
+        Assert.Equal("Teams meeting", NoteJob.SplitName("Teams meeting 2026-10-30 10.44 (2)").Title);
+        Assert.Equal(("Interview Anna", null), NoteJob.SplitName("Interview Anna"));
+        Assert.Equal("2026-10-30 10.44", NoteJob.SplitName("2026-10-30 10.44").Title); // no title left: the name as it is
+    }
+
+    [Fact]
+    public void A_new_title_goes_into_the_transcript_heading()
+    {
+        var markdown = "# Teams meeting 2026-10-30 10.44\n\n*Transcribed by Whisper*\n\n## Transcript\n\n**[00:01] Niels:** Hoi\n";
+        var renamed = TranscriptFile.WithTitle(markdown, "Niels Nissen");
+        Assert.Equal("Niels Nissen", TranscriptFile.Parse(renamed).Title);
+        Assert.Equal(markdown.Replace("# Teams meeting 2026-10-30 10.44", "# Niels Nissen"), renamed);
+        Assert.StartsWith("# Niels\n\n", TranscriptFile.WithTitle("**[00:01]** Hoi\n", "Niels"));
     }
 
     [Fact]

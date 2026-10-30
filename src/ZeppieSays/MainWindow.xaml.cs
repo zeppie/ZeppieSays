@@ -206,6 +206,42 @@ public partial class MainWindow : Window
             Model.Notetaker.SplitLine(line, box.CaretIndex);
     }
 
+    // Renaming a recording: F2 or Rename on its card puts the cursor in its name; Enter renames, Esc keeps the name.
+    void RenameJob_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is Notes.NoteJob job) BeginRename(job);
+    }
+
+    void JobStrip_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F2 || Model.Notetaker.Selected is not { IsDone: true } job) return;
+        BeginRename(job);
+        e.Handled = true;
+    }
+
+    void BeginRename(Notes.NoteJob job)
+    {
+        Model.Notetaker.Selected = job;
+        // The name box shows once the page has laid out the selected recording.
+        Dispatcher.BeginInvoke(() =>
+        {
+            RecordingTitle.Focus();
+            RecordingTitle.SelectAll();
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    void RecordingTitle_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+            RecordingTitle.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+        else if (e.Key == Key.Escape)
+            RecordingTitle.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
+        else
+            return;
+        Keyboard.Focus(JobStrip);
+        e.Handled = true;
+    }
+
     /// <summary>Enter in a speaker's name box applies the name, like leaving the box does.</summary>
     void SpeakerName_KeyDown(object sender, KeyEventArgs e)
     {
