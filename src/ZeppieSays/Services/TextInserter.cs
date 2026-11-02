@@ -39,7 +39,7 @@ public static class TextInserter
             });
     }
 
-    static DataObject? SaveClipboard()
+    internal static DataObject? SaveClipboard()
     {
         try
         {
@@ -64,7 +64,7 @@ public static class TextInserter
         }
     }
 
-    static async Task<bool> Retry(Action action)
+    internal static async Task<bool> Retry(Action action)
     {
         for (var attempt = 0; attempt < 5; attempt++)
         {

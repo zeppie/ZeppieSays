@@ -4,6 +4,15 @@ using System.Text.Json.Serialization;
 
 namespace ZeppieSays.Core;
 
+/// <summary>What a key does with what was said.</summary>
+public enum KeyAction
+{
+    /// <summary>Types it where the cursor is (after the style's tidy-up).</summary>
+    Type,
+    /// <summary>Takes it as a question and shows the answer in a card above the pill.</summary>
+    Ask,
+}
+
 /// <summary>One dictation key: which key starts it, which model transcribes, in which language, and what language comes out.</summary>
 public sealed class KeyBinding
 {
@@ -21,6 +30,14 @@ public sealed class KeyBinding
     public string OutputLanguage { get; set; } = SameLanguage;
 
     public bool Translates => OutputLanguage is { Length: > 0 } and not SameLanguage;
+
+    public KeyAction Action { get; set; } = KeyAction.Type;
+    /// <summary>Who answers an Ask key's questions. Default means the default model (Styles page).</summary>
+    public LlmProvider AskProvider { get; set; } = LlmProvider.Default;
+    /// <summary>Only with a provider of its own; unused with the default model.</summary>
+    public string AskModel { get; set; } = "";
+
+    public bool Asks => Action == KeyAction.Ask;
 }
 
 public sealed class DictionaryEntry

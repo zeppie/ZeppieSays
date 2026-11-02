@@ -91,6 +91,16 @@ public partial class App : Application
         _controller.Failed += message => Dispatcher.BeginInvoke(() => _overlay.ShowError(message));
         _controller.Rewriting += style => Dispatcher.BeginInvoke(() => _overlay.ShowRewriting(style));
 
+        // An Ask key's answer, in a card where the pill was; Esc closes it while no dictation runs.
+        var answer = new AnswerWindow(new Llm.Answerer(_settings));
+        _controller.Asked += (question, context, key) => Dispatcher.BeginInvoke(() => answer.Ask(question, context, key));
+        _controller.EscapeWhenIdle = () =>
+        {
+            if (!answer.IsOpen) return false;
+            Dispatcher.BeginInvoke(answer.CloseCard);
+            return true;
+        };
+
         CreateTray(model);
 
         var background = e.Args.Contains("--background");

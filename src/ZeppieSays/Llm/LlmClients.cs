@@ -64,7 +64,7 @@ public sealed class OllamaChat(string baseUrl, string model, string keepLoaded) 
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(2) };
 
     /// <summary>Ollama's keep_alive: a duration like "4h", or -1 to keep the model loaded until Ollama stops.</summary>
-    static JsonNode KeepAlive(string keepLoaded) =>
+    internal static JsonNode KeepAlive(string keepLoaded) =>
         keepLoaded == "forever" ? JsonValue.Create(-1) : JsonValue.Create(string.IsNullOrWhiteSpace(keepLoaded) ? "30m" : keepLoaded);
 
     /// <summary>Ollama's num_ctx in tokens, for long inputs such as meeting transcripts; null keeps the model's default.</summary>

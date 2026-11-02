@@ -172,9 +172,12 @@ public partial class OverlayWindow : Window
     /// Win32 because monitors can each have their own scaling; WPF rescales the window when it lands on a
     /// monitor with another DPI, which raises SizeChanged and re-centres it.
     /// </summary>
-    void PlaceOnScreen()
+    void PlaceOnScreen() => PlaceBottomCentre(this);
+
+    /// <summary>Also for the answer card, which takes the pill's place when a question is answered.</summary>
+    internal static void PlaceBottomCentre(Window window)
     {
-        var hwnd = new WindowInteropHelper(this).EnsureHandle();
+        var hwnd = new WindowInteropHelper(window).EnsureHandle();
         var area = System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position).WorkingArea;
         if (!GetWindowRect(hwnd, out var rect)) return;
         var width = rect.Right - rect.Left;

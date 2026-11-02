@@ -447,7 +447,7 @@
                         <TextBlock Text="Key" Style="{StaticResource Caption}" Margin="0,0,0,4" />
                         <TextBlock Grid.Column="1" Text="Model" Style="{StaticResource Caption}" Margin="8,0,0,4" />
                         <TextBlock Grid.Column="2" Text="You speak" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                        <TextBlock Grid.Column="4" Text="It types" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                        <TextBlock Grid.Column="4" Text="{Binding OutputCaption}" Style="{StaticResource Caption}" Margin="0,0,0,4" />
                         <Button Grid.Row="1" Content="{Binding KeyLabel}" Command="{Binding RecordKey}" HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Left" Padding="11,5"
                                 ToolTip="Click, then press the key or key combination you want (Esc to cancel)">
@@ -477,8 +477,39 @@
                         <ComboBox Grid.Row="1" Grid.Column="4"
                                   ItemsSource="{Binding DataContext.OutputLanguages, RelativeSource={RelativeSource AncestorType=Window}}"
                                   DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding OutputLanguage}"
-                                  ToolTip="Another language here translates what you say, using your default style model (Styles page)" />
+                                  ToolTip="Another language here translates what you say, using your default style model (Styles page). For a key that asks, the language of the answer." />
                     </Grid>
+                    <!-- Type what was said, or take it as a question and answer it in a card above the pill -->
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="What it does" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                        <TextBlock Grid.Column="1" Text="Answered by" Style="{StaticResource Caption}" Margin="8,0,0,4"
+                                   Visibility="{Binding Asks, Converter={StaticResource Visible}}" />
+                        <ComboBox Grid.Row="1" ItemsSource="{x:Static ui:BindingViewModel.Actions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding Action}" AutomationProperties.Name="What it does"
+                                  ToolTip="Ask a question: what you say is answered in a card above the pill, using what's selected and on screen" />
+                        <Grid Grid.Row="1" Grid.Column="1" Margin="8,0,0,0" Visibility="{Binding Asks, Converter={StaticResource Visible}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox ItemsSource="{x:Static ui:BindingViewModel.AskProviders}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding AskProvider}" AutomationProperties.Name="Answered by" />
+                            <ComboBox Grid.Column="2" IsEditable="True" ItemsSource="{Binding AskModelSuggestions}"
+                                      Text="{Binding AskModel, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Answering model"
+                                      Visibility="{Binding UsesOwnAskModel, Converter={StaticResource Visible}}" />
+                        </Grid>
+                    </Grid>
+                    <TextBlock Text="{Binding AskNotice}" Style="{StaticResource Caption}" Margin="2,6,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding Asks, Converter={StaticResource Visible}}" />
                     <TextBlock Text="{Binding KeyProblem}" Foreground="#E5484D" FontSize="12" Margin="2,6,0,0" TextWrapping="Wrap">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">

@@ -6,7 +6,7 @@ namespace ZeppieSays.Services;
 public static class NativeInput
 {
     const uint KEYEVENTF_KEYUP = 0x0002;
-    public const ushort VK_CONTROL = 0x11, VK_V = 0x56;
+    public const ushort VK_CONTROL = 0x11, VK_V = 0x56, VK_C = 0x43;
     /// <summary>An unassigned key code; pressing it has no effect except breaking up "Win/Alt pressed alone".</summary>
     const ushort VK_MASK = 0xE8;
 

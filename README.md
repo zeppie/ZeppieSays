@@ -18,6 +18,11 @@ Press a key anywhere, talk, and the text lands where your cursor is.
   *ElevenLabs Scribe v2 (cloud)* can be picked for a dictation key or the Notetaker. Your audio is sent to
   ElevenLabs. Dictionary words (and names from the screen, when dictating) go along as key terms, at most 100,
   which ElevenLabs charges 20% extra for.
+- **Ask a question.** Set a key's "What it does" to *Ask a question*, hold it and ask ("what does this word mean?",
+  "explain this", "what's the latest .NET?"). The answer streams into a card above the pill, with Copy and Paste at
+  cursor; Esc or × closes it. The selected text, the text around the cursor and the window's text (OCR) go along with
+  the question. Each Ask key has its own answering model (kept in the profile): Claude and OpenAI search the web when
+  needed and show their sources; Ollama answers on this PC without searching.
 - **A small pill** at the bottom of the screen shows the key, the waveform and the model while you talk.
   The finished text is inserted in one go when you stop.
 - **Dictionary.** Words you use a lot get the right spelling. `Betabit` alone works, and

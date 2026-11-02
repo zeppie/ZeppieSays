@@ -740,15 +740,115 @@ public sealed class BindingViewModel : ObservableObject
         set { if (value is null) return; _binding.OutputLanguage = value; _owner.ApplyBindings(); Raise(); Raise(nameof(OutputLabel)); }
     }
 
-    /// <summary>"→ English" for a key that translates, else empty.</summary>
-    public string OutputLabel => _binding.Translates
-        ? "→ " + (ModelCatalog.Languages.FirstOrDefault(l => l.Code == _binding.OutputLanguage).Name ?? _binding.OutputLanguage)
-        : "";
+    /// <summary>"→ English" for a key that translates, "→ answers" for one that asks, else empty.</summary>
+    public string OutputLabel
+    {
+        get
+        {
+            var language = _binding.Translates
+                ? ModelCatalog.Languages.FirstOrDefault(l => l.Code == _binding.OutputLanguage).Name ?? _binding.OutputLanguage
+                : null;
+            if (_binding.Asks) return language is null ? "→ answers" : $"→ answers in {language}";
+            return language is null ? "" : "→ " + language;
+        }
+    }
 
     /// <summary>Parakeet picks the language itself, so its language picker is greyed out.</summary>
     public bool LanguageEnabled => _owner.ModelInfo(_binding.ModelId) is not { AutoLanguageOnly: true };
 
     public string ModelName => _owner.ModelInfo(_binding.ModelId)?.Name ?? "no model yet";
+
+    // ---- Typing or asking ------------------------------------------------------------------------
+
+    public static IReadOnlyList<Choice> Actions { get; } =
+    [
+        new(nameof(KeyAction.Type), "Type the text"),
+        new(nameof(KeyAction.Ask), "Ask a question"),
+    ];
+
+    public static IReadOnlyList<Choice> AskProviders { get; } =
+    [
+        new(nameof(LlmProvider.Default), "Default model"),
+        new(nameof(LlmProvider.Ollama), "Ollama (on this PC)"),
+        new(nameof(LlmProvider.OpenAI), "OpenAI (cloud, searches the web)"),
+        new(nameof(LlmProvider.Anthropic), "Claude (cloud, searches the web)"),
+    ];
+
+    public string Action
+    {
+        get => _binding.Action.ToString();
+        set
+        {
+            if (value is null || !Enum.TryParse<KeyAction>(value, out var action) || action == _binding.Action) return;
+            _binding.Action = action;
+            _owner.ApplyBindings();
+            Refresh();
+        }
+    }
+
+    public bool Asks => _binding.Asks;
+
+    /// <summary>An Ask key answers in the chosen language rather than typing in it.</summary>
+    public string OutputCaption => _binding.Asks ? "Answer in" : "It types";
+
+    public string AskProvider
+    {
+        get => _binding.AskProvider.ToString();
+        set
+        {
+            if (value is null || !Enum.TryParse<LlmProvider>(value, out var provider) || provider == _binding.AskProvider) return;
+            _binding.AskProvider = provider;
+            // Start from a sensible model for the provider, as a style does; the user can type another.
+            _binding.AskModel = provider switch
+            {
+                LlmProvider.Ollama => _owner.Styles.OllamaModels.FirstOrDefault() ?? StyleDefaults.LocalModel,
+                LlmProvider.OpenAI => _owner.Styles.SuggestedOpenAiModel,
+                LlmProvider.Anthropic => "claude-haiku-5-5", // quick answers; Sonnet or Opus can be typed in
+                _ => "",
+            };
+            _owner.ApplyBindings();
+            Refresh();
+        }
+    }
+
+    public string AskModel
+    {
+        get => _binding.AskModel;
+        set
+        {
+            var model = value?.Trim() ?? "";
+            if (model == _binding.AskModel) return;
+            _binding.AskModel = model;
+            _owner.ApplyBindings();
+            Raise();
+            Raise(nameof(AskNotice));
+        }
+    }
+
+    public bool UsesOwnAskModel => _binding.AskProvider is LlmProvider.Ollama or LlmProvider.OpenAI or LlmProvider.Anthropic;
+
+    public IEnumerable<string> AskModelSuggestions => _owner.Styles.ModelSuggestionsFor(_binding.AskProvider);
+
+    /// <summary>Who answers, and what leaves the PC for it.</summary>
+    public string AskNotice
+    {
+        get
+        {
+            var answerer = _owner.Styles.Effective(new Style { Provider = _binding.AskProvider, Model = _binding.AskModel });
+            const string sent = "Your question, the selected text and the text on screen go to";
+            return answerer.Provider switch
+            {
+                LlmProvider.Ollama => $"Answered on this PC by {answerer.Model}, without searching the web. Nothing leaves the PC.",
+                LlmProvider.OpenAI => _owner.Styles.HasOpenAiKey
+                    ? $"{sent} OpenAI ({answerer.Model}), which searches the web when needed."
+                    : $"{sent} OpenAI. Add your API key in Settings, under AI providers.",
+                LlmProvider.Anthropic => _owner.Styles.HasAnthropicKey
+                    ? $"{sent} Anthropic ({answerer.Model}), which searches the web when needed."
+                    : $"{sent} Anthropic. Add your API key in Settings, under AI providers.",
+                _ => "",
+            };
+        }
+    }
 
     public void Refresh()
     {
@@ -756,6 +856,15 @@ public sealed class BindingViewModel : ObservableObject
         Raise(nameof(Language)); // a profile switch changes it from outside
         Raise(nameof(LanguageEnabled));
         Raise(nameof(ModelName));
+        Raise(nameof(Action));
+        Raise(nameof(Asks));
+        Raise(nameof(OutputCaption));
+        Raise(nameof(OutputLabel));
+        Raise(nameof(AskProvider));
+        Raise(nameof(AskModel));
+        Raise(nameof(UsesOwnAskModel));
+        Raise(nameof(AskModelSuggestions));
+        Raise(nameof(AskNotice));
     }
 }
 

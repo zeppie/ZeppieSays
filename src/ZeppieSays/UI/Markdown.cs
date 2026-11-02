@@ -66,22 +66,25 @@ public static partial class Markdown
     /// <summary>Adds the line's text with **bold** and *italic* spans.</summary>
     static Paragraph Inline(Paragraph paragraph, string text)
     {
+        foreach (var inline in Spans(text))
+        {
+            if (inline is Italic) inline.SetResourceReference(TextElement.ForegroundProperty, "TextFillColorSecondaryBrush");
+            paragraph.Inlines.Add(inline);
+        }
+        return paragraph;
+    }
+
+    /// <summary>A line's text as runs, with **bold** and *italic* spans; also for a TextBlock.</summary>
+    internal static IEnumerable<Inline> Spans(string text)
+    {
         var position = 0;
         foreach (Match m in Emphasis().Matches(text))
         {
-            if (m.Index > position) paragraph.Inlines.Add(new Run(text[position..m.Index]));
-            if (m.Groups[1].Success)
-                paragraph.Inlines.Add(new Bold(new Run(m.Groups[1].Value)));
-            else
-            {
-                var italic = new Italic(new Run(m.Groups[2].Value));
-                italic.SetResourceReference(TextElement.ForegroundProperty, "TextFillColorSecondaryBrush");
-                paragraph.Inlines.Add(italic);
-            }
+            if (m.Index > position) yield return new Run(text[position..m.Index]);
+            yield return m.Groups[1].Success ? new Bold(new Run(m.Groups[1].Value)) : new Italic(new Run(m.Groups[2].Value));
             position = m.Index + m.Length;
         }
-        if (position < text.Length) paragraph.Inlines.Add(new Run(text[position..]));
-        return paragraph;
+        if (position < text.Length) yield return new Run(text[position..]);
     }
 
     [GeneratedRegex(@"\*\*(.+?)\*\*|\*(.+?)\*")]

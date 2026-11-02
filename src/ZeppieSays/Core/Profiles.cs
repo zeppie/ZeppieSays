@@ -7,16 +7,18 @@ public sealed class StyleModelChoice
     public string Model { get; set; } = "";
 }
 
-/// <summary>A dictation key's speech model and spoken language inside a profile.</summary>
+/// <summary>A dictation key's speech model and spoken language inside a profile, and for an Ask key who answers.</summary>
 public sealed class KeyModelChoice
 {
     public string ModelId { get; set; } = "";
     public string Language { get; set; } = "auto";
+    public LlmProvider AskProvider { get; set; } = LlmProvider.Default;
+    public string AskModel { get; set; } = "";
 }
 
 /// <summary>
 /// A named set of model choices, e.g. "Local", "Cloud" or "Test": the speech model and spoken language of every
-/// dictation key, the default AI model with its keep-loaded time, and the AI model of every style. Switching
+/// dictation key (and who answers an Ask key), the default AI model with its keep-loaded time, and the AI model of every style. Switching
 /// profiles swaps all of them at once. The hotkeys, what they type in, and the styles' names, strengths and rules
 /// stay the same in every profile.
 /// </summary>
@@ -43,7 +45,10 @@ public sealed class ModelProfile
     }
 
     static Dictionary<string, KeyModelChoice> CaptureKeys(AppSettings settings) =>
-        settings.Keys.ToDictionary(k => k.Id, k => new KeyModelChoice { ModelId = k.ModelId, Language = k.Language });
+        settings.Keys.ToDictionary(k => k.Id, k => new KeyModelChoice
+        {
+            ModelId = k.ModelId, Language = k.Language, AskProvider = k.AskProvider, AskModel = k.AskModel,
+        });
 
     /// <summary>
     /// Puts this profile's models into the settings. A style the profile doesn't know yet (added while another
@@ -67,6 +72,8 @@ public sealed class ModelProfile
             if (Keys?.GetValueOrDefault(key.Id) is not { } choice) continue;
             key.ModelId = choice.ModelId;
             key.Language = choice.Language;
+            key.AskProvider = choice.AskProvider;
+            key.AskModel = choice.AskModel;
         }
     }
 

@@ -86,6 +86,80 @@ switch (args.FirstOrDefault())
         break;
     }
 
+    case "ask": // probe ask "<question>" ["<selected text>"]  — answered as an Ask key would, by the first Ask key's model
+    {
+        // ZS_PROFILE: answer with another profile's models, in memory only (nothing is saved).
+        if (Environment.GetEnvironmentVariable("ZS_PROFILE") is { Length: > 0 } profileName)
+            settings.Profiles.First(p => p.Name == profileName).ApplyTo(settings);
+        var answerer = new ZeppieSays.Llm.Answerer(settings);
+        var key = settings.Keys.FirstOrDefault(k => k.Asks) ?? new KeyBinding { Action = KeyAction.Ask };
+        var (provider, model) = answerer.Resolve(key);
+        if (answerer.Create(provider, model) is not { } answerModel)
+        {
+            Console.WriteLine($"No API key for {provider}");
+            break;
+        }
+        var context = ScreenContext.Empty with { SelectedText = args.Length > 2 ? args[2] : null };
+        var progress = new ZeppieSays.Llm.AnswerProgress();
+        string? lastStatus = null;
+        var shown = 0;
+        progress.Changed += () =>
+        {
+            lock (progress)
+            {
+                if (progress.Status is { } status && status != lastStatus) Console.WriteLine($"[{status}]");
+                lastStatus = progress.Status;
+                var text = progress.Text;
+                if (text.Length > shown) { Console.Write(text[shown..]); shown = text.Length; }
+            }
+        };
+        var watch = Stopwatch.StartNew();
+        await answerModel.AnswerAsync(ZeppieSays.Llm.Answerer.SystemPrompt(answerModel.SearchesWeb, null, DateTime.Now),
+            ZeppieSays.Llm.Answerer.UserMessage(args[1], context), progress, CancellationToken.None);
+        Console.WriteLine();
+        Console.WriteLine($"-- {provider} {model} in {watch.ElapsedMilliseconds} ms");
+        foreach (var source in progress.Sources) Console.WriteLine($"   {source.Site}: {source.Title} {source.Url}");
+        break;
+    }
+
+    case "card": // probe card "<question>" "<selected text>" <out.png>  — the answer card as the app shows it, saved as an image
+    {
+        if (Environment.GetEnvironmentVariable("ZS_PROFILE") is { Length: > 0 } profileName)
+            settings.Profiles.First(p => p.Name == profileName).ApplyTo(settings);
+        var key = settings.Keys.FirstOrDefault(k => k.Asks) ?? new KeyBinding { Key = "F10", Action = KeyAction.Ask };
+        var context = ScreenContext.Empty with { SelectedText = args[2].Length > 0 ? args[2] : null };
+        var ui = new Thread(() =>
+        {
+            var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+            var card = new ZeppieSays.UI.AnswerWindow(new ZeppieSays.Llm.Answerer(settings));
+            // From inside the message loop, as the app does, so the card's awaits come back to the UI thread.
+            app.Dispatcher.BeginInvoke(() => card.Ask(args[1], context, key));
+            // Long enough for a web search; then a picture of the card, drawn on its own (no desktop behind it).
+            var done = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(12) };
+            done.Tick += (_, _) =>
+            {
+                done.Stop();
+                var content = (System.Windows.FrameworkElement)card.Content;
+                var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(content);
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)(content.ActualWidth * dpi.DpiScaleX), (int)(content.ActualHeight * dpi.DpiScaleY),
+                    dpi.PixelsPerInchX, dpi.PixelsPerInchY, System.Windows.Media.PixelFormats.Pbgra32);
+                bitmap.Render(content);
+                var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using (var file = File.Create(args[3])) png.Save(file);
+                Console.WriteLine($"saved {args[3]}");
+                app.Shutdown();
+            };
+            done.Start();
+            app.Run();
+        });
+        ui.SetApartmentState(ApartmentState.STA);
+        ui.Start();
+        ui.Join();
+        break;
+    }
+
     case "rewrite": // probe rewrite <process> "<window title>" "<dictated text>" ["<text before cursor>"]
     {
         var context = ScreenContext.Empty with

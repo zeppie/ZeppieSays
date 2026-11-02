@@ -23,6 +23,12 @@ public sealed record ScreenContext(
     IReadOnlyList<string> Identifiers)
 {
     public static readonly ScreenContext Empty = new(IntPtr.Zero, "", "", false, null, null, []);
+
+    /// <summary>The selection in the focused control, or null when nothing is selected or the app doesn't expose it.</summary>
+    public string? SelectedText { get; init; }
+
+    /// <summary>All the text OCR read in the window, for a question about what's on screen.</summary>
+    public string? WindowText { get; init; }
 }
 
 public static partial class ContextCapture
@@ -39,6 +45,7 @@ public static partial class ContextCapture
     };
 
     const int MaxSurroundingChars = 500;
+    const int MaxSelectedChars = 6000;
 
     /// <summary>Only the window and process; cheap enough to run on every key press.</summary>
     public static ScreenContext Foreground()
@@ -93,13 +100,17 @@ public static partial class ContextCapture
     /// <summary>Adds the text around the cursor and the identifiers visible in the window.</summary>
     public static async Task<ScreenContext> EnrichAsync(ScreenContext basic, CancellationToken ct)
     {
-        var surrounding = WithTimeout(Task.Run(ReadAroundCursor, ct), TimeSpan.FromMilliseconds(800), (null, null));
+        var surrounding = WithTimeout(Task.Run(ReadAroundCursor, ct), TimeSpan.FromMilliseconds(800), (null, null, null));
         var ocr = WithTimeout(OcrWindowAsync(basic.Window), TimeSpan.FromSeconds(3), "");
         await Task.WhenAll(surrounding, ocr);
 
-        var (before, after) = surrounding.Result;
+        var (before, after, selected) = surrounding.Result;
         var source = string.Join('\n', basic.Title, ocr.Result, before, after);
-        return basic with { BeforeText = before, AfterText = after, Identifiers = ExtractIdentifiers(source) };
+        return basic with
+        {
+            BeforeText = before, AfterText = after, Identifiers = ExtractIdentifiers(source),
+            SelectedText = selected, WindowText = ocr.Result,
+        };
     }
 
     static async Task<T> WithTimeout<T>(Task<T> task, TimeSpan timeout, T fallback)
@@ -116,16 +127,20 @@ public static partial class ContextCapture
         }
     }
 
-    /// <summary>Reads text before and after the caret through UI Automation, if the focused control supports it.</summary>
-    static (string?, string?) ReadAroundCursor()
+    /// <summary>
+    /// Reads text before and after the caret, and what is selected, through UI Automation, if the focused control
+    /// supports it.
+    /// </summary>
+    static (string?, string?, string?) ReadAroundCursor()
     {
         var element = AutomationElement.FocusedElement;
-        if (element is null) return (null, null);
+        if (element is null) return (null, null, null);
+        var selected = ReadSelection(element);
 
         if (element.TryGetCurrentPattern(TextPattern.Pattern, out var p) && p is TextPattern text)
         {
             var selection = text.GetSelection();
-            if (selection.Length == 0) return (null, null);
+            if (selection.Length == 0) return (null, null, selected);
             var caret = selection[0];
 
             var before = caret.Clone();
@@ -136,7 +151,7 @@ public static partial class ContextCapture
             after.MoveEndpointByRange(TextPatternRangeEndpoint.Start, caret, TextPatternRangeEndpoint.End);
             after.MoveEndpointByUnit(TextPatternRangeEndpoint.End, TextUnit.Character, MaxSurroundingChars);
 
-            return (before.GetText(MaxSurroundingChars), after.GetText(MaxSurroundingChars));
+            return (before.GetText(MaxSurroundingChars), after.GetText(MaxSurroundingChars), selected);
         }
 
         // Plain inputs without a text pattern: we know the content but not the caret, so assume the end.
@@ -144,9 +159,34 @@ public static partial class ContextCapture
             && !element.Current.IsPassword)
         {
             var content = value.Current.Value ?? "";
-            return (content.Length > MaxSurroundingChars ? content[^MaxSurroundingChars..] : content, "");
+            return (content.Length > MaxSurroundingChars ? content[^MaxSurroundingChars..] : content, "", selected);
         }
-        return (null, null);
+        return (null, null, selected);
+    }
+
+    /// <summary>
+    /// The selected text: in the focused control, or else in the page or document around it. A word selected in a
+    /// Teams message or on a web page is selected on the page while the focus stays in, say, the message box.
+    /// </summary>
+    static string? ReadSelection(AutomationElement focused)
+    {
+        var walker = TreeWalker.ControlViewWalker;
+        for (var element = focused; element is not null; element = walker.GetParent(element))
+        {
+            try
+            {
+                if (element.TryGetCurrentPattern(TextPattern.Pattern, out var p) && p is TextPattern text)
+                    foreach (var range in text.GetSelection())
+                        if (range.GetText(MaxSelectedChars) is { } selected && !string.IsNullOrWhiteSpace(selected))
+                            return selected;
+            }
+            catch (Exception e) when (e is InvalidOperationException or ElementNotAvailableException)
+            {
+                // this control can't report a selection; its container may
+            }
+            if (element.Current.ControlType == ControlType.Window) break; // the app's window: no further
+        }
+        return null;
     }
 
     /// <summary>Runs the built-in Windows OCR on the foreground window.</summary>

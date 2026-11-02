@@ -39,6 +39,14 @@ public sealed class DictationController : IDisposable
     public event Action<string>? Failed;
     /// <summary>Raised with the style's name while an LLM rewrites the transcript.</summary>
     public event Action<string>? Rewriting;
+    /// <summary>An Ask key's question, with what was on screen, for the answer card.</summary>
+    public event Action<string, ScreenContext, KeyBinding>? Asked;
+
+    /// <summary>
+    /// Esc while no dictation runs, e.g. to close the answer card. Called on the key hook's thread, so it must return
+    /// at once; true swallows the key.
+    /// </summary>
+    public Func<bool>? EscapeWhenIdle { get; set; }
 
     /// <summary>The last dictation before any style rewrote it, for "Paste last dictation unedited".</summary>
     public string? LastUnedited { get; private set; }
@@ -63,7 +71,7 @@ public sealed class DictationController : IDisposable
         });
         hook.Escape = () =>
         {
-            if (_state == DictationState.Idle) return false;
+            if (_state == DictationState.Idle) return EscapeWhenIdle?.Invoke() ?? false;
             _ui.BeginInvoke(Cancel);
             return true;
         };
@@ -125,24 +133,30 @@ public sealed class DictationController : IDisposable
         _session = new CancellationTokenSource();
         var basic = ContextCapture.Foreground();
         var page = ContextCapture.AddBrowserPageAsync(basic);
-        _context = CaptureAsync(basic, page, _session.Token);
+        // A question is about what's on screen, so an Ask key reads it even with screen context turned off for dictation.
+        _context = CaptureAsync(basic, page, _settings.UseScreenContext || binding.Asks, _session.Token);
         SetState(DictationState.Recording, binding);
 
         _ = _engines.GetAsync(binding.ModelId); // make sure the model is warming up
         _ = PrepareStyleAsync(page, binding); // and the style's LLM, while the user talks
     }
 
-    async Task<ScreenContext> CaptureAsync(ScreenContext basic, Task<ScreenContext> page, CancellationToken ct)
+    static async Task<ScreenContext> CaptureAsync(ScreenContext basic, Task<ScreenContext> page, bool readScreen, CancellationToken ct)
     {
-        var enriched = _settings.UseScreenContext ? await ContextCapture.EnrichAsync(basic, ct) : basic;
+        var enriched = readScreen ? await ContextCapture.EnrichAsync(basic, ct) : basic;
         return enriched with { Title = (await page).Title };
     }
 
-    /// <summary>Once the browser tab is known (a website rule may pick another style), warms up the style's model.</summary>
+    /// <summary>
+    /// Once the browser tab is known (a website rule may pick another style), warms up the style's model, or for an
+    /// Ask key the model that answers.
+    /// </summary>
     async Task PrepareStyleAsync(Task<ScreenContext> page, KeyBinding binding)
     {
         var context = await page;
-        _rewriter.WarmUp(_rewriter.ResolveStyle(context, binding));
+        _rewriter.WarmUp(binding.Asks
+            ? new Style { Provider = binding.AskProvider, Model = binding.AskModel }
+            : _rewriter.ResolveStyle(context, binding));
         RememberApp(context);
     }
 
@@ -164,6 +178,13 @@ public sealed class DictationController : IDisposable
 
             var engine = await _engines.GetAsync(binding.ModelId);
             var context = await _context!;
+            // Teams, for one, doesn't always tell UI Automation what's selected: then copy it, now the hotkey is released.
+            var copiedSelection = false;
+            if (binding.Asks && context.SelectedText is null && await SelectionCopier.CopyAsync(context) is { } copied)
+            {
+                context = context with { SelectedText = copied };
+                copiedSelection = true;
+            }
             var watch = Stopwatch.StartNew();
             var raw = await engine.TranscribeAsync(new(Pad(samples), binding.Language, PromptFor(engine, binding, context),
                 engine is ElevenLabsEngine ? TextShaping.KeyTerms(_settings.AllWords, context) : null), CancellationToken.None);
@@ -176,6 +197,16 @@ public sealed class DictationController : IDisposable
                      $"{raw.Length} chars raw, {text.Length} after cleanup, {context.Identifiers.Count} screen words");
             LastUnedited = text;
             var spoken = text.Trim();
+
+            if (binding.Asks)
+            {
+                // A question isn't typed anywhere: the answer card takes it from here.
+                Log.Info($"Question from '{context.ProcessName}': {spoken.Length} chars, " +
+                         $"{context.SelectedText?.Length ?? 0} selected{(copiedSelection ? " (copied)" : "")}, " +
+                         $"{context.WindowText?.Length ?? 0} on screen");
+                if (spoken.Length > 0) Asked?.Invoke(spoken, context, binding);
+                return;
+            }
 
             var style = _rewriter.ResolveStyle(context, binding);
             Log.Info($"Into '{context.ProcessName}' \"{context.Title}\": style '{style.Name}'");
