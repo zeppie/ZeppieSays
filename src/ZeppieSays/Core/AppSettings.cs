@@ -87,6 +87,9 @@ public sealed class AppSettings
     /// <summary>The style for every app no rule matches.</summary>
     public string DefaultStyleId { get; set; } = StyleDefaults.RawId;
     public LlmSettings Llm { get; set; } = new();
+    /// <summary>Saved sets of model choices to switch between; the active one follows every change to the models.</summary>
+    public List<ModelProfile> Profiles { get; set; } = [];
+    public string ActiveProfileId { get; set; } = "";
     public List<SeenApp> RecentApps { get; set; } = [];
     /// <summary>Whisper ggml files the user added by hand, outside the built-in catalog.</summary>
     public List<CustomModel> CustomModels { get; set; } = [];

@@ -7,7 +7,8 @@ namespace ZeppieSays.UI;
 
 /// <summary>
 /// The Styles tab: every style in a list, the selected one in an editor beside it (with the apps and websites it is
-/// used in). The AI providers it uses are edited on the Settings page.
+/// used in), and above them the profile with the default model. The Ollama address and API keys are on the
+/// Settings page.
 /// </summary>
 public sealed class StylesViewModel : ObservableObject
 {
@@ -85,7 +86,8 @@ public sealed class StylesViewModel : ObservableObject
             settings.Llm.DefaultModel = OpenAiChat.SuggestedModel;
             repaired = true;
         }
-        if (repaired) save();
+        if (repaired | ModelProfiles.EnsureOne(settings)) save();
+        foreach (var profile in settings.Profiles) Profiles.Add(new ProfileViewModel(profile, Save));
         foreach (var style in settings.Styles) Styles.Add(new StyleViewModel(style, this));
         foreach (var rule in settings.StyleRules) Rules.Add(new RuleViewModel(rule, this));
         _selected = Styles.FirstOrDefault(s => s.Model.Id != StyleDefaults.RawId) ?? Styles.FirstOrDefault();
@@ -105,6 +107,7 @@ public sealed class StylesViewModel : ObservableObject
             if (Selected is not { CanDelete: true } doomed) return;
             _settings.Styles.Remove(doomed.Model);
             Styles.Remove(doomed);
+            foreach (var profile in _settings.Profiles) profile.Styles.Remove(doomed.Model.Id);
             // Rules that pointed at it fall back to the default style.
             foreach (var rule in Rules.Where(r => r.StyleId == doomed.Model.Id).ToList()) RemoveRuleFor(rule);
             if (_settings.DefaultStyleId == doomed.Model.Id) DefaultStyleId = StyleDefaults.RawId;
@@ -115,12 +118,61 @@ public sealed class StylesViewModel : ObservableObject
         RemoveRule = new RelayCommand(p => { if (p is RuleViewModel rule) RemoveRuleFor(rule); });
         TryStyle = new RelayCommand(_ => _ = TryAsync());
         RefreshOllama = new RelayCommand(_ => _ = LoadOllamaModelsAsync());
+        AddProfile = new RelayCommand(_ =>
+        {
+            // A new profile starts as a copy of the current one, so only what should differ needs changing.
+            var profile = ModelProfile.From(_settings, $"Profile {_settings.Profiles.Count + 1}");
+            _settings.Profiles.Add(profile);
+            var vm = new ProfileViewModel(profile, Save);
+            Profiles.Add(vm);
+            ActiveProfile = vm;
+        });
+        DeleteProfile = new RelayCommand(_ =>
+        {
+            if (!CanDeleteProfile || ActiveProfile is not { } doomed) return;
+            _settings.Profiles.Remove(doomed.Model);
+            Profiles.Remove(doomed);
+            ActiveProfile = Profiles[0];
+            Raise(nameof(CanDeleteProfile));
+        });
         _ = LoadOllamaModelsAsync();
         _ = LoadOpenAiModelsAsync();
         _ = LoadAnthropicModelsAsync();
     }
 
-    internal void Save() => _save();
+    /// <summary>Every change to a model also goes into the active profile, so switching back finds it as it was left.</summary>
+    internal void Save()
+    {
+        ModelProfiles.Active(_settings)?.CaptureFrom(_settings);
+        _save();
+    }
+
+    // ---- Profiles -------------------------------------------------------------------------------
+
+    public ObservableCollection<ProfileViewModel> Profiles { get; } = [];
+    public RelayCommand AddProfile { get; }
+    public RelayCommand DeleteProfile { get; }
+
+    public ProfileViewModel? ActiveProfile
+    {
+        get => Profiles.FirstOrDefault(p => p.Model.Id == _settings.ActiveProfileId);
+        set
+        {
+            if (value is null || value.Model.Id == _settings.ActiveProfileId) return;
+            _settings.ActiveProfileId = value.Model.Id;
+            value.Model.ApplyTo(_settings);
+            Save();
+            Raise();
+            Raise(nameof(CanDeleteProfile));
+            Raise(nameof(DefaultModelSuggestions));
+            Raise(nameof(DefaultIsLocal));
+            Raise(nameof(KeepLoaded));
+            DefaultChanged();
+        }
+    }
+
+    /// <summary>One profile always stays.</summary>
+    public bool CanDeleteProfile => Profiles.Count > 1;
 
     public StyleViewModel? Selected
     {
@@ -530,7 +582,7 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
 
     public bool UsesDefault => Model.Provider == LlmProvider.Default;
 
-    public string DefaultNotice => $"Uses the default model ({owner.DefaultModelLabel}). Change it in Settings, under AI providers.";
+    public string DefaultNotice => $"Uses the default model ({owner.DefaultModelLabel}). Change it at the top of this page.";
 
     /// <summary>"qwen3:8b · Medium" for the list: which AI and how much it may change.</summary>
     public string Summary => Model.Provider == LlmProvider.None
@@ -574,6 +626,7 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
 
     public void Refresh()
     {
+        Raise(nameof(Provider)); // a profile switch changes it from outside
         Raise(nameof(Summary));
         Raise(nameof(ModelName));
         Raise(nameof(UsesAi));
@@ -595,6 +648,17 @@ public sealed class StyleViewModel(Style style, StylesViewModel owner) : Observa
             : "Text dictated with this style is sent to Anthropic. Add your API key in Settings, under AI providers.",
         _ => "",
     };
+}
+
+public sealed class ProfileViewModel(ModelProfile profile, Action save) : ObservableObject
+{
+    public ModelProfile Model { get; } = profile;
+
+    public string Name
+    {
+        get => Model.Name;
+        set { Model.Name = string.IsNullOrWhiteSpace(value) ? "Unnamed" : value.Trim(); save(); Raise(); }
+    }
 }
 
 public sealed class RuleViewModel(StyleRule rule, StylesViewModel owner) : ObservableObject

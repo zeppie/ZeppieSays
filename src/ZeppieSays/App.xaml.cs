@@ -91,14 +91,14 @@ public partial class App : Application
         _controller.Failed += message => Dispatcher.BeginInvoke(() => _overlay.ShowError(message));
         _controller.Rewriting += style => Dispatcher.BeginInvoke(() => _overlay.ShowRewriting(style));
 
-        CreateTray();
+        CreateTray(model.Styles);
 
         var background = e.Args.Contains("--background");
         if (!background || model.HasNoModels)
             ShowMainWindow();
     }
 
-    void CreateTray()
+    void CreateTray(StylesViewModel styles)
     {
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Open ZeppieSays", null, (_, _) => ShowMainWindow());
@@ -106,7 +106,19 @@ public partial class App : Application
         {
             if (_controller?.LastUnedited is { Length: > 0 } text) Clipboard.SetText(text.Trim());
         });
-        menu.Opening += (_, _) => copyUnedited.Enabled = _controller?.LastUnedited is { Length: > 0 };
+        // Switch profiles without opening the window; filled when the menu opens, so new names show up.
+        var profiles = new Forms.ToolStripMenuItem("Profile");
+        menu.Items.Add(profiles);
+        menu.Opening += (_, _) =>
+        {
+            copyUnedited.Enabled = _controller?.LastUnedited is { Length: > 0 };
+            profiles.DropDownItems.Clear();
+            foreach (var profile in styles.Profiles)
+                profiles.DropDownItems.Add(new Forms.ToolStripMenuItem(profile.Name, null, (_, _) => styles.ActiveProfile = profile)
+                {
+                    Checked = profile == styles.ActiveProfile,
+                });
+        };
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => Quit());
 

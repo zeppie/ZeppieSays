@@ -38,7 +38,9 @@ Press a key anywhere, talk, and the text lands where your cursor is.
   Each style has a strength (light, medium, strong), rules in plain words and a Try box. All styles use one
   default model (so a local model never has to be swapped in and out of graphics memory), unless a style
   picks its own, e.g. a cloud model for Formal. The default model is loaded when ZeppieSays starts and kept
-  loaded for a configurable time (30 minutes to always).
+  loaded for a configurable time (30 minutes to always). **Profiles** at the top of the Styles page hold the
+  default model and every style's model, so you can switch all of them at once (say Local, Cloud and Test),
+  there or from the tray menu.
   Models run locally through [Ollama](https://ollama.com) (default `qwen3:4b-instruct`, ~0.5 s per rewrite
   on an RTX 4060), or in the cloud through OpenAI or Anthropic with your own API key (stored encrypted with
   Windows DPAPI; such styles are clearly marked). The rewrite must keep your language and meaning; if it

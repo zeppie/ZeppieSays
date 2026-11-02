@@ -1550,7 +1550,7 @@
 
             <!-- Styles -->
             <TabItem Header="Styles" Tag="&#xE8D2;" x:Name="StylesTab">
-                <!-- Every style in a list; the selected one in the editor beside it. The AI providers are on the Settings page. -->
+                <!-- Every style in a list; the selected one in the editor beside it; the profile and default model above. Ollama and the keys are on the Settings page. -->
                 <Grid DataContext="{Binding Styles}" Margin="0,4,18,16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -1562,11 +1562,63 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <!-- Top bar -->
-                    <TextBlock Grid.ColumnSpan="3" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,0,12" TextWrapping="Wrap">
-                        <Run Text="A style decides how your dictation is tidied up: by rules only, or rewritten by an AI. Each app or website can have its own. The AI models are under" />
-                        <Hyperlink Click="OpenAiProviders_Click">Settings, AI providers</Hyperlink><Run Text="." />
-                    </TextBlock>
+                    <!-- Top bar: the profile, and the default model it holds -->
+                    <Border Grid.ColumnSpan="3" Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,14" TextWrapping="Wrap">
+                                <Run Text="A style decides how your dictation is tidied up: by rules only, or rewritten by an AI. Each app or website can have its own. A profile holds the AI model of every style, so you can switch them all at once, for example between local and cloud. The Ollama address and API keys are under" />
+                                <Hyperlink Click="OpenAiProviders_Click">Settings, AI providers</Hyperlink><Run Text="." />
+                            </TextBlock>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="1.4*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Profile" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding ActiveProfile}" DisplayMemberPath="Name"
+                                                  AutomationProperties.Name="Profile" />
+                                        <Button Grid.Column="1" Content="New" Command="{Binding AddProfile}" Margin="8,0,0,0"
+                                                ToolTip="A copy of this profile; change only what should differ" />
+                                        <Button Grid.Column="2" Content="Delete" Command="{Binding DeleteProfile}" IsEnabled="{Binding CanDeleteProfile}"
+                                                Margin="8,0,0,0" ToolTip="Removes this profile; the first one in the list takes over" />
+                                    </Grid>
+                                    <TextBlock Text="Name" Style="{StaticResource Caption}" Margin="0,12,0,4" />
+                                    <TextBox Text="{Binding ActiveProfile.Name, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Profile name" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Default model, used by every style unless it picks another" Style="{StaticResource Caption}"
+                                               Margin="0,0,0,4" TextWrapping="Wrap" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="1.3*" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox ItemsSource="{x:Static ui:StylesViewModel.DefaultProviders}" DisplayMemberPath="Label"
+                                                  SelectedValuePath="Value" SelectedValue="{Binding DefaultProvider}" />
+                                        <ComboBox Grid.Column="2" IsEditable="True" ItemsSource="{Binding DefaultModelSuggestions}"
+                                                  Text="{Binding DefaultModel, UpdateSourceTrigger=LostFocus}" />
+                                    </Grid>
+                                    <StackPanel Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,12,0,4" />
+                                        <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
+                                                  SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
+                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                   Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
 
                     <!-- The styles -->
                     <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0" Padding="10">
@@ -1954,37 +2006,16 @@
                             <StackPanel>
                                 <TextBlock Text="AI providers" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
                                 <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,14" TextWrapping="Wrap"
-                                           Text="The AI models your styles rewrite with. Which style is used where is on the Styles page." />
+                                           Text="Where the AI models run: Ollama on this PC, and the cloud services with your keys. Which model each style uses, and the profiles to switch them, are on the Styles page." />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="28" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <!-- The default model, and Ollama on this PC -->
+                                    <!-- Ollama on this PC -->
                                     <StackPanel>
-                                        <TextBlock Text="Default model, used by every style unless it picks another" Style="{StaticResource Caption}"
-                                                   Margin="0,0,0,4" TextWrapping="Wrap" />
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="1.3*" />
-                                                <ColumnDefinition Width="8" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <ComboBox ItemsSource="{x:Static ui:StylesViewModel.DefaultProviders}" DisplayMemberPath="Label"
-                                                      SelectedValuePath="Value" SelectedValue="{Binding DefaultProvider}" />
-                                            <ComboBox Grid.Column="2" IsEditable="True" ItemsSource="{Binding DefaultModelSuggestions}"
-                                                      Text="{Binding DefaultModel, UpdateSourceTrigger=LostFocus}" />
-                                        </Grid>
-                                        <StackPanel Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,12,0,4" />
-                                            <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
-                                                      SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
-                                            <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
-                                                       Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
-                                        </StackPanel>
-
-                                        <TextBlock Text="Ollama address, on this PC" Style="{StaticResource Caption}" Margin="0,14,0,4" />
+                                        <TextBlock Text="Ollama address, on this PC" Style="{StaticResource Caption}" Margin="0,0,0,4" />
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
