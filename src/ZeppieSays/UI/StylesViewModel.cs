@@ -318,6 +318,15 @@ public sealed class StylesViewModel : ObservableObject
 
     public bool HasOpenAiKey => _settings.Llm.OpenAiKeyProtected.Length > 0;
     public bool HasAnthropicKey => _settings.Llm.AnthropicKeyProtected.Length > 0;
+    public bool HasElevenLabsKey => _settings.Llm.ElevenLabsKeyProtected.Length > 0;
+
+    /// <summary>Saved for ElevenLabs; no style uses it, so nothing else needs refreshing.</summary>
+    public void SetElevenLabsKey(string key)
+    {
+        _settings.Llm.ElevenLabsKeyProtected = SecretStore.Protect(key.Trim());
+        Save();
+        Raise(nameof(HasElevenLabsKey));
+    }
 
     public void SetOpenAiKey(string key)
     {

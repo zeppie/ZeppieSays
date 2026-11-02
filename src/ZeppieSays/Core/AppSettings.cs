@@ -174,6 +174,7 @@ public static class SettingsStore
             var keys = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(KeysPath)) ?? [];
             llm.OpenAiKeyProtected = keys.GetValueOrDefault("OpenAI", "");
             llm.AnthropicKeyProtected = keys.GetValueOrDefault("Anthropic", "");
+            llm.ElevenLabsKeyProtected = keys.GetValueOrDefault("ElevenLabs", "");
         }
         catch (Exception e)
         {
@@ -186,6 +187,7 @@ public static class SettingsStore
         {
             ["OpenAI"] = llm.OpenAiKeyProtected,
             ["Anthropic"] = llm.AnthropicKeyProtected,
+            ["ElevenLabs"] = llm.ElevenLabsKeyProtected,
         }));
 
     public static string Serialize(AppSettings settings) => JsonSerializer.Serialize(settings, Json);

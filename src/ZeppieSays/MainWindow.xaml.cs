@@ -308,6 +308,8 @@ public partial class MainWindow : Window
     void AnthropicKeyBox_LostFocus(object sender, RoutedEventArgs e) => SaveKey((PasswordBox)sender, Model.Styles.SetAnthropicKey);
     void RemoveOpenAiKey_Click(object sender, RoutedEventArgs e) => Model.Styles.SetOpenAiKey("");
     void RemoveAnthropicKey_Click(object sender, RoutedEventArgs e) => Model.Styles.SetAnthropicKey("");
+    void ElevenLabsKeyBox_LostFocus(object sender, RoutedEventArgs e) => SaveKey((PasswordBox)sender, Model.Styles.SetElevenLabsKey);
+    void RemoveElevenLabsKey_Click(object sender, RoutedEventArgs e) => Model.Styles.SetElevenLabsKey("");
 
     static void SaveKey(PasswordBox box, Action<string> save)
     {

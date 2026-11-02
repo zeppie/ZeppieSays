@@ -20,7 +20,15 @@ public sealed class ModelManager(AppSettings settings)
 
     public bool IsInstalled(string id) =>
         settings.CustomModels.Any(c => c.Id == id && File.Exists(c.Path)) ||
-        File.Exists(Path.Combine(DirFor(id), Marker));
+        File.Exists(Path.Combine(DirFor(id), Marker)) ||
+        ModelCatalog.Cloud.Any(m => m.Id == id && HasCloudKey(m));
+
+    /// <summary>A cloud model counts as installed while its API key is saved.</summary>
+    bool HasCloudKey(ModelInfo model) => model.Engine switch
+    {
+        EngineKind.ElevenLabs => settings.Llm.ElevenLabsKeyProtected.Length > 0,
+        _ => false,
+    };
 
     public IReadOnlyList<InstalledModel> Installed()
     {
@@ -31,8 +39,12 @@ public sealed class ModelManager(AppSettings settings)
         list.AddRange(settings.CustomModels
             .Where(c => File.Exists(c.Path))
             .Select(c => new InstalledModel(CustomInfo(c), c.Path)));
+        list.AddRange(ModelCatalog.Cloud.Where(HasCloudKey).Select(m => new InstalledModel(m, "")));
         return list;
     }
+
+    /// <summary>For changes that make models available or not without an install, like saving an API key.</summary>
+    public void NotifyChanged() => Changed?.Invoke();
 
     public InstalledModel? Find(string id) => Installed().FirstOrDefault(m => m.Info.Id == id);
 

@@ -44,9 +44,24 @@ public class SettingsTests
         var settings = new AppSettings();
         settings.Llm.OpenAiKeyProtected = "protected-openai";
         settings.Llm.AnthropicKeyProtected = "protected-anthropic";
+        settings.Llm.ElevenLabsKeyProtected = "protected-elevenlabs";
         var json = SettingsStore.Serialize(settings);
         Assert.DoesNotContain("protected-openai", json);
+        Assert.DoesNotContain("protected-elevenlabs", json);
         Assert.DoesNotContain("KeyProtected", json);
+    }
+
+    [Fact]
+    public void ElevenLabs_is_a_speech_model_only_while_its_key_is_saved()
+    {
+        var settings = new AppSettings();
+        var models = new ModelManager(settings);
+        Assert.DoesNotContain(models.Installed(), m => m.Info.Engine == EngineKind.ElevenLabs);
+        Assert.False(models.IsInstalled("elevenlabs-scribe-v2"));
+
+        settings.Llm.ElevenLabsKeyProtected = "protected-elevenlabs";
+        Assert.Contains(models.Installed(), m => m.Info.Id == "elevenlabs-scribe-v2" && m.Info.IsCloud);
+        Assert.True(models.IsInstalled("elevenlabs-scribe-v2"));
     }
 
     [Fact]

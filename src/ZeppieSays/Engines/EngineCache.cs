@@ -78,6 +78,10 @@ public sealed class EngineCache(ModelManager models, AppSettings settings) : IDi
     {
         EngineKind.Whisper => new WhisperEngine(model.Info.Name, model.Path, settings.UseGpu),
         EngineKind.SherpaTransducer => new SherpaTransducerEngine(model.Info.Name, model.Path),
+        EngineKind.ElevenLabs => new ElevenLabsEngine(model.Info.Name, "scribe_v2",
+            Llm.SecretStore.Unprotect(settings.Llm.ElevenLabsKeyProtected) is { Length: > 0 } key
+                ? key
+                : throw new InvalidOperationException("The ElevenLabs API key can't be read. Enter it again on the Settings page.")),
         _ => throw new NotSupportedException(model.Info.Engine.ToString()),
     };
 

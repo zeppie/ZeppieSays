@@ -6,6 +6,8 @@ public enum EngineKind
     Whisper,
     /// <summary>NeMo transducer exported to ONNX, run through sherpa-onnx (CPU).</summary>
     SherpaTransducer,
+    /// <summary>ElevenLabs Scribe over their API: nothing to download, needs the ElevenLabs key.</summary>
+    ElevenLabs,
 }
 
 public sealed record ModelInfo(
@@ -19,10 +21,21 @@ public sealed record ModelInfo(
     /// <summary>True when the model detects the spoken language itself and has no language setting.</summary>
     bool AutoLanguageOnly = false,
     /// <summary>True when the model can be steered with a text prompt (dictionary and screen context).</summary>
-    bool SupportsPrompt = false);
+    bool SupportsPrompt = false)
+{
+    /// <summary>The audio goes to an online service instead of staying on this PC.</summary>
+    public bool IsCloud => Engine == EngineKind.ElevenLabs;
+}
 
 public static class ModelCatalog
 {
+    /// <summary>Speech models that run online. They're offered once their API key is saved; the Local models tab doesn't list them.</summary>
+    public static IReadOnlyList<ModelInfo> Cloud { get; } =
+    [
+        new("elevenlabs-scribe-v2", "ElevenLabs Scribe v2 (cloud)", EngineKind.ElevenLabs,
+            "ElevenLabs' speech-to-text, online: the audio leaves this PC.", "99 languages", 0, ""),
+    ];
+
     const string Ggml = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
     const string Sherpa = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/";
 

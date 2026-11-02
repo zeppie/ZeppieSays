@@ -608,6 +608,9 @@ public sealed partial class Notetaker : IDisposable
                      (options.UseDictionary ? TextShaping.BuildPrompt(_settings.AllWords, ScreenContext.Empty) : "");
             prompt = prompt.Trim();
         }
+        var keyTerms = model.Info.Engine == EngineKind.ElevenLabs && options.UseDictionary
+            ? TextShaping.KeyTerms(_settings.AllWords, ScreenContext.Empty)
+            : null;
         var language = model.Info.AutoLanguageOnly ? "auto" : options.Language;
         var pieces = turns.Select(t => (Turn: t, Pieces: AudioFile.Split(t.Track, t.Start, t.End))).ToList();
         var total = Math.Max(1, pieces.Sum(p => p.Pieces.Count));
@@ -621,7 +624,7 @@ public sealed partial class Notetaker : IDisposable
                 report("Transcribing", done++ / (double)total);
                 if (AudioFile.IsSilent(turn.Track, start, end)) continue;
                 while (_isDictating()) await Task.Delay(250, ct); // the keys go first
-                var (raw, words) = await engine.TranscribeWordsAsync(new(AudioFile.Slice(turn.Track, start, end), language, prompt), ct);
+                var (raw, words) = await engine.TranscribeWordsAsync(new(AudioFile.Slice(turn.Track, start, end), language, prompt, keyTerms), ct);
                 var offset = start / (double)Audio.SampleRate;
                 var track = Math.Max(0, tracks.ToList().IndexOf(turn.Track));
                 transcript.Words.AddRange(words.Select(w => new SpokenWord(w.Text, offset + w.Start, offset + w.End, track)));

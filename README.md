@@ -1,6 +1,7 @@
 # ZeppieSays
 
-Local voice dictation for Windows, in the spirit of Wispr Flow, but every model runs on your own machine.
+Local voice dictation for Windows, in the spirit of Wispr Flow, but the models run on your own machine
+unless you choose a cloud one.
 Press a key anywhere, talk, and the text lands where your cursor is.
 
 ## What it does
@@ -8,11 +9,15 @@ Press a key anywhere, talk, and the text lands where your cursor is.
 - **Two dictation keys**, each bound to its own model and language (for example F8 → Whisper in Dutch,
   F9 → Parakeet in English). Hold the key to talk, or tap it once to keep listening and tap again to finish.
   Esc cancels.
-- **Local models only.** Install them from the Models tab:
+- **Local models.** Install them from the Local models tab:
   - Whisper (whisper.cpp ggml files, run on an NVIDIA GPU through CUDA 12, CPU as fallback):
     large-v3, large-v3 turbo, turbo compact, medium (English), small. You can also add your own `.bin` file.
   - NVIDIA Parakeet TDT 0.6B v2 (English) and v3 (25 European languages, including Dutch), run on the CPU
     through sherpa-onnx.
+- **ElevenLabs, optional, in the cloud.** Save an ElevenLabs API key in Settings, AI providers, and
+  *ElevenLabs Scribe v2 (cloud)* can be picked for a dictation key or the Notetaker. Your audio is sent to
+  ElevenLabs. Dictionary words (and names from the screen, when dictating) go along as key terms, at most 100,
+  which ElevenLabs charges 20% extra for.
 - **A small pill** at the bottom of the screen shows the key, the waveform and the model while you talk.
   The finished text is inserted in one go when you stop.
 - **Dictionary.** Words you use a lot get the right spelling. `Betabit` alone works, and
@@ -44,7 +49,7 @@ Press a key anywhere, talk, and the text lands where your cursor is.
   (default `Documents\Zeppie Says\Notes`) is transcribed with timestamps by the model you pick. Optional: speaker
   labels (local sherpa-onnx diarization, two small models downloaded on first use; pick the number of people when
   you know it), a summary with decisions and action items from your default style model, and dictionary hints for
-  Whisper. The transcript is written as Markdown next to the audio, and both move to `Done`. Transcribing pauses
+  Whisper and ElevenLabs. The transcript is written as Markdown next to the audio, and both move to `Done`. Transcribing pauses
   while you dictate.
 - **Meeting recording.** When Teams, Zoom, Webex, Slack or Discord starts using the microphone (Windows' own
   microphone-usage record), a corner pop-up asks whether to record; *Record now* on the Notetaker page works for
@@ -65,7 +70,8 @@ makes Whisper about five times faster (a 10-second sentence takes ~0.5 s on an R
 
 Model notes from testing: Whisper large-v3 turbo is the best Dutch choice because it takes the dictionary
 and screen context as hints. Parakeet is fast on the CPU and excellent for English, but it can't take
-hints, so for Parakeet add `Term = wrong spelling` entries to the dictionary.
+hints, so for Parakeet add `Term = wrong spelling` entries to the dictionary. ElevenLabs Scribe v2 takes the
+dictionary as key terms and got `ZeppieSays` right in ~0.9 s for a 3-second sentence.
 
 ```bash
 dotnet build ZeppieSays.slnx
@@ -81,7 +87,7 @@ Settings, models and logs are stored in `%LOCALAPPDATA%\ZeppieSays`.
 | Path | What's there |
 | --- | --- |
 | `src/ZeppieSays/Core` | Settings, model catalog, paths and logging |
-| `src/ZeppieSays/Engines` | Whisper.net and sherpa-onnx engines, plus a cache that keeps bound models loaded |
+| `src/ZeppieSays/Engines` | Whisper.net, sherpa-onnx and ElevenLabs engines, plus a cache that keeps bound models loaded |
 | `src/ZeppieSays/Services` | Key hook, recording, dictation flow, screen context, text cleanup, pasting, model downloads |
 | `src/ZeppieSays/Notes` | Notetaker: audio file decoding, speaker diarization, the transcription queue, summaries |
 | `src/ZeppieSays/UI` | Settings view models and the floating overlay |
@@ -94,5 +100,6 @@ Probe examples:
 ```bash
 dotnet run --project tools/ZeppieSays.Probe -- install whisper-large-v3-turbo
 dotnet run --project tools/ZeppieSays.Probe -- run whisper-large-v3-turbo nl "Ik werk bij Betabit aan ZeppieSays." "Betabit;ZeppieSays"
+dotnet run --project tools/ZeppieSays.Probe -- run elevenlabs-scribe-v2 nl "Ik werk bij Betabit aan ZeppieSays." "Betabit;ZeppieSays"
 dotnet run --project tools/ZeppieSays.Probe -- diarize meeting.m4a 0.4 0.5 n2
 ```

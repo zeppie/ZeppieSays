@@ -120,6 +120,20 @@ public class TextShapingTests
         Assert.Equal("", TextShaping.BuildPrompt([], Context(before: "Some English text before the cursor")));
 
     [Fact]
+    public void Key_terms_skip_what_ElevenLabs_refuses_and_put_the_dictionary_first()
+    {
+        var dictionary = new[] { "Betabit", "betabit", "List<string>", "one two three four five six", new string('x', 50), "Zeppie  Says" }
+            .Select(t => new DictionaryEntry { Term = t });
+        var terms = TextShaping.KeyTerms(dictionary, Context(code: true, identifiers: ["userId", "Betabit"]));
+        Assert.Equal(["Betabit", "Zeppie Says", "userId"], terms);
+    }
+
+    [Fact]
+    public void Key_terms_stop_at_a_hundred() =>
+        Assert.Equal(100, TextShaping.KeyTerms(
+            Enumerable.Range(0, 150).Select(i => new DictionaryEntry { Term = $"term{i}" }), ScreenContext.Empty).Count);
+
+    [Fact]
     public void Extracts_code_like_identifiers()
     {
         var ids = ContextCapture.ExtractIdentifiers("const userId = getUserName(); open Program.cs and my_var, then The End");

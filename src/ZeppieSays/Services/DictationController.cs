@@ -165,7 +165,8 @@ public sealed class DictationController : IDisposable
             var engine = await _engines.GetAsync(binding.ModelId);
             var context = await _context!;
             var watch = Stopwatch.StartNew();
-            var raw = await engine.TranscribeAsync(new(Pad(samples), binding.Language, PromptFor(engine, binding, context)), CancellationToken.None);
+            var raw = await engine.TranscribeAsync(new(Pad(samples), binding.Language, PromptFor(engine, binding, context),
+                engine is ElevenLabsEngine ? TextShaping.KeyTerms(_settings.AllWords, context) : null), CancellationToken.None);
             if (session.IsCancellationRequested) return;
 
             var counts = new CleanupCounts();

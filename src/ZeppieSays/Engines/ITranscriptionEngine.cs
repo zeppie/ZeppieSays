@@ -5,7 +5,9 @@ public sealed record TranscriptionRequest(
     /// <summary>ISO code or "auto".</summary>
     string Language,
     /// <summary>Vocabulary and preceding text to steer models that accept a prompt. May be empty.</summary>
-    string Prompt);
+    string Prompt,
+    /// <summary>Words to listen for, for models that take a list instead of a prompt (ElevenLabs). Null when there are none.</summary>
+    IReadOnlyList<string>? KeyTerms = null);
 
 /// <summary>A word as the speech model heard it, with when it was said (seconds into the samples it was given).</summary>
 public sealed record TimedWord(string Text, double Start, double End);

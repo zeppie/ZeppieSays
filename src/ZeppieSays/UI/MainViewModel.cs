@@ -81,6 +81,11 @@ public sealed class MainViewModel : ObservableObject
         SetUpSettingsFolder();
         SetUpHistory();
         Styles = new StylesViewModel(settings, rewriter, Save);
+        // Saving or removing the ElevenLabs key adds or removes ElevenLabs from the speech model pickers.
+        Styles.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(StylesViewModel.HasElevenLabsKey)) models.NotifyChanged();
+        };
         Insights = new InsightsViewModel(usage);
         Loaded = new LoadedModelsViewModel(settings, models, engines);
         Notetaker = new NotetakerViewModel(settings, notetaker, summarizer, voices, meetings, dictionaryFiles, Save);

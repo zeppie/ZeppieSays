@@ -36,6 +36,23 @@ public static partial class TextShaping
         return prompt + ".";
     }
 
+    /// <summary>ElevenLabs bills every call as at least 20 seconds above this many key terms, which short dictations would feel.</summary>
+    const int MaxKeyTerms = 100;
+
+    /// <summary>
+    /// The same names as <see cref="BuildPrompt"/>, as the list ElevenLabs listens for: the dictionary first, so it
+    /// wins when there are too many. ElevenLabs refuses terms of 50 characters or more, of more than five words,
+    /// or with &lt; &gt; { } [ ] \ in them.
+    /// </summary>
+    public static IReadOnlyList<string> KeyTerms(IEnumerable<DictionaryEntry> dictionary, ScreenContext context) =>
+        dictionary.Select(d => d.Term)
+            .Concat(context.Identifiers.Take(context.IsCodeEditor ? 40 : 15))
+            .Select(t => Whitespace().Replace(t, " ").Trim())
+            .Where(t => t.Length is > 0 and < 50 && t.IndexOfAny(['<', '>', '{', '}', '[', ']', '\\']) < 0 && t.Split(' ').Length <= 5)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(MaxKeyTerms)
+            .ToList();
+
     public static string Clean(string raw, AppSettings settings, ScreenContext context, CleanupCounts? counts = null)
     {
         counts ??= new CleanupCounts();

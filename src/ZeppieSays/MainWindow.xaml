@@ -1293,7 +1293,7 @@
                             <StackPanel>
                                 <TextBlock Text="Install a model to get started" Style="{StaticResource SectionTitle}" />
                                 <TextBlock Style="{StaticResource Caption}"
-                                           Text="Open the Models tab. For Dutch, Whisper large-v3 turbo is a good start; for English, Parakeet v2." />
+                                           Text="Open the Local models tab. For Dutch, Whisper large-v3 turbo is a good start; for English, Parakeet v2." />
                             </StackPanel>
                         </Border>
 
@@ -1313,7 +1313,7 @@
             </TabItem>
 
             <!-- Models -->
-            <TabItem Header="Models" Tag="&#xE8F1;" x:Name="ModelsTab">
+            <TabItem Header="Local models" Tag="&#xE8F1;" x:Name="ModelsTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,4,18,16">
                     <StackPanel>
                         <!-- What is in memory right now, and where it runs. -->
@@ -2012,6 +2012,14 @@
                                                    Visibility="{Binding HasAnthropicKey, Converter={StaticResource Visible}}">
                                             Key saved, encrypted for your Windows account. Type a new one to replace it, or
                                             <Hyperlink Click="RemoveAnthropicKey_Click">remove it</Hyperlink>.
+                                        </TextBlock>
+
+                                        <TextBlock Text="ElevenLabs API key" Style="{StaticResource Caption}" Margin="0,14,0,4" />
+                                        <PasswordBox x:Name="ElevenLabsKeyBox" LostFocus="ElevenLabsKeyBox_LostFocus" />
+                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding HasElevenLabsKey, Converter={StaticResource Visible}}">
+                                            Key saved, encrypted for your Windows account. Type a new one to replace it, or
+                                            <Hyperlink Click="RemoveElevenLabsKey_Click">remove it</Hyperlink>.
                                         </TextBlock>
                                         <TextBlock Style="{StaticResource Caption}" Margin="2,10,0,0" TextWrapping="Wrap"
                                                    Text="Keys stay on this PC, also when your settings folder is in OneDrive." />

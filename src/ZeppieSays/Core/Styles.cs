@@ -54,6 +54,7 @@ public sealed class LlmSettings
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore] public string OpenAiKeyProtected { get; set; } = "";
     [System.Text.Json.Serialization.JsonIgnore] public string AnthropicKeyProtected { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore] public string ElevenLabsKeyProtected { get; set; } = "";
     /// <summary>After this long the plain transcript is pasted instead of waiting for the LLM.</summary>
     public double TimeoutSeconds { get; set; } = 6;
 

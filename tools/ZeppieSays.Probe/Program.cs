@@ -61,10 +61,12 @@ switch (args.FirstOrDefault())
                 for (var i = 0; i < samples.Length; i++) samples[i] *= gain;
             var prompt = engine is WhisperEngine ? TextShaping.BuildPrompt(settings.Dictionary, screen) : "";
             Console.WriteLine($"prompt ({prompt.Length} chars): {prompt}");
+            var keyTerms = engine is ElevenLabsEngine ? TextShaping.KeyTerms(settings.Dictionary, screen) : null;
+            if (keyTerms is not null) Console.WriteLine($"key terms: {string.Join("; ", keyTerms)}");
             for (var run = 1; run <= 2; run++) // the first run includes GPU warm-up
             {
                 var watch = Stopwatch.StartNew();
-                var raw = await engine.TranscribeAsync(new(samples, language, prompt), CancellationToken.None);
+                var raw = await engine.TranscribeAsync(new(samples, language, prompt, keyTerms), CancellationToken.None);
                 Console.WriteLine($"run {run}: {watch.ElapsedMilliseconds} ms");
                 if (run == 2)
                 {

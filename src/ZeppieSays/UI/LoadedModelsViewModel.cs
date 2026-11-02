@@ -9,7 +9,7 @@ using ZeppieSays.Services;
 namespace ZeppieSays.UI;
 
 /// <summary>
-/// The "In memory now" panel of the Models page: which speech and text models are loaded, whether they run on the
+/// The "In memory now" panel of the Local models page: which speech and text models are loaded, whether they run on the
 /// graphics card or the processor, and buttons to load and unload them. Refreshes itself only while it's on screen.
 /// </summary>
 public sealed class LoadedModelsViewModel : ObservableObject
@@ -122,7 +122,8 @@ public sealed class LoadedModelsViewModel : ObservableObject
     List<Snapshot> SpeechSnapshots()
     {
         var engines = _engines.Loaded().ToDictionary(e => e.ModelId);
-        return _models.Installed().Select(m =>
+        // A cloud model holds nothing in memory, so it has no place in this list.
+        return _models.Installed().Where(m => !m.Info.IsCloud).Select(m =>
         {
             var size = m.Info.ApproxBytes >= 1_000_000_000 ? $"{m.Info.ApproxBytes / 1e9:0.0} GB" : $"{m.Info.ApproxBytes / 1e6:0} MB";
             var detail = $"{m.Info.Languages} · {size} on disk";
