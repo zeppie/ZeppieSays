@@ -1815,7 +1815,7 @@
                                             VerticalAlignment="Top" Style="{DynamicResource AccentButtonStyle}" />
                                 </Grid>
                                 <Border CornerRadius="8" Padding="12,10" Margin="0,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                                        Visibility="{Binding TryResult, Converter={StaticResource EmptyToVisible}}">
+                                        Visibility="{Binding TryResult, Converter={StaticResource EmptyToVisible}, ConverterParameter=Not}">
                                     <TextBlock Text="{Binding TryResult}" TextWrapping="Wrap" />
                                 </Border>
 

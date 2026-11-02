@@ -474,6 +474,12 @@ public sealed class StylesViewModel : ObservableObject
                     ? $"{result.Text}\n\n(Not rewritten: {result.FallbackReason}. This is what would be pasted.)"
                     : $"{result.Text}\n\n(No AI for this style: only fillers, dictionary and capitals.)";
         }
+        catch (Exception e)
+        {
+            // The rewrite catches its own errors; this is for anything before it, which would otherwise vanish.
+            Log.Error("Trying a style failed", e);
+            TryResult = $"Couldn't try this style: {e.Message}";
+        }
         finally
         {
             IsTrying = false;
