@@ -8,7 +8,11 @@ using ZeppieSays.Services;
 
 namespace ZeppieSays.UI;
 
-public sealed record Choice(string Value, string Label);
+public sealed record Choice(string Value, string Label)
+{
+    /// <summary>What a screen reader says for it in a list, instead of the record's fields.</summary>
+    public override string ToString() => Label;
+}
 
 /// <summary>A person in the voice library, as listed in Settings, with a few seconds of them to listen to.</summary>
 /// <param name="unlearnedBy">The voice model that doesn't know this voice yet, or null when it does.</param>
@@ -77,6 +81,11 @@ public sealed class MainViewModel : ObservableObject
     {
         _history = history;
         _voices = voices;
+        // First: the view models below may save while they set up, and saving needs the settings.
+        _settings = settings;
+        _models = models;
+        _engines = engines;
+        _hook = hook;
         SetUpDictionaryFiles(dictionaryFiles);
         SetUpSettingsFolder();
         SetUpHistory();
@@ -89,10 +98,6 @@ public sealed class MainViewModel : ObservableObject
         Insights = new InsightsViewModel(usage);
         Loaded = new LoadedModelsViewModel(settings, models, engines);
         Notetaker = new NotetakerViewModel(settings, notetaker, summarizer, voices, meetings, dictionaryFiles, Save);
-        _settings = settings;
-        _models = models;
-        _engines = engines;
-        _hook = hook;
         SetUpVoices(); // after the Notetaker: its recordings are where voice samples come from
         notetaker.VoicesRelearned += RefreshVoices;
 
@@ -117,8 +122,29 @@ public sealed class MainViewModel : ObservableObject
             if (_recording == key) { _hook.StopRecording(); _recording = null; }
             _settings.Keys.Remove(key.Binding);
             Keys.Remove(key);
+            ModelProfiles.Forget(_settings, key.Binding.Id);
             RenumberKeys();
             ApplyBindings();
+        });
+        if (ModelProfiles.EnsureOne(settings)) Save();
+        foreach (var profile in settings.Profiles) Profiles.Add(new ProfileViewModel(profile, Save));
+        AddProfile = new RelayCommand(_ =>
+        {
+            // A new profile starts as a copy of the current one, so only what should differ needs changing.
+            var profile = ModelProfile.From(_settings, $"Profile {_settings.Profiles.Count + 1}");
+            _settings.Profiles.Add(profile);
+            var vm = new ProfileViewModel(profile, Save);
+            Profiles.Add(vm);
+            ActiveProfile = vm;
+            Raise(nameof(CanDeleteProfile));
+        });
+        DeleteProfile = new RelayCommand(_ =>
+        {
+            if (!CanDeleteProfile || ActiveProfile is not { } doomed) return;
+            _settings.Profiles.Remove(doomed.Model);
+            Profiles.Remove(doomed);
+            ActiveProfile = Profiles[0];
+            Raise(nameof(CanDeleteProfile));
         });
         Microphones = AudioRecorder.Devices().Select((name, i) => new Choice(i.ToString(), name))
             .Prepend(new Choice("-1", "Windows default")).ToList();
@@ -174,6 +200,30 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public bool CanRemoveKeys => Keys.Count > 1;
+
+    // ---- Profiles: which models the keys and styles use, switched all at once -------------------
+
+    public ObservableCollection<ProfileViewModel> Profiles { get; } = [];
+    public RelayCommand AddProfile { get; }
+    public RelayCommand DeleteProfile { get; }
+
+    public ProfileViewModel? ActiveProfile
+    {
+        get => Profiles.FirstOrDefault(p => p.Model.Id == _settings.ActiveProfileId);
+        set
+        {
+            if (value is null || value.Model.Id == _settings.ActiveProfileId) return;
+            _settings.ActiveProfileId = value.Model.Id;
+            value.Model.ApplyTo(_settings);
+            foreach (var key in Keys) key.Refresh();
+            ApplyBindings(); // loads the keys' new speech models and saves
+            Styles.ProfileApplied();
+            Raise();
+        }
+    }
+
+    /// <summary>One profile always stays.</summary>
+    public bool CanDeleteProfile => Profiles.Count > 1;
 
     internal void ApplyBindings()
     {
@@ -703,9 +753,24 @@ public sealed class BindingViewModel : ObservableObject
     public void Refresh()
     {
         Raise(nameof(ModelId));
+        Raise(nameof(Language)); // a profile switch changes it from outside
         Raise(nameof(LanguageEnabled));
         Raise(nameof(ModelName));
     }
+}
+
+public sealed class ProfileViewModel(ModelProfile profile, Action save) : ObservableObject
+{
+    public ModelProfile Model { get; } = profile;
+
+    public string Name
+    {
+        get => Model.Name;
+        set { Model.Name = string.IsNullOrWhiteSpace(value) ? "Unnamed" : value.Trim(); save(); Raise(); }
+    }
+
+    /// <summary>What a screen reader says for it in the profile list.</summary>
+    public override string ToString() => Name;
 }
 
 public sealed class ModelRowViewModel : ObservableObject

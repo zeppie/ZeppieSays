@@ -10,6 +10,9 @@ public sealed class KeyBinding
     /// <summary>Output language that means "as spoken": no translation.</summary>
     public const string SameLanguage = "same";
 
+    /// <summary>Stays the same when the hotkey changes, so a profile knows which key its choices are for.</summary>
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
     public string Key { get; set; } = "F8";
     public string ModelId { get; set; } = "";
     /// <summary>ISO language code ("nl", "en", ...) or "auto". Ignored by models that detect language themselves.</summary>
@@ -211,6 +214,8 @@ public static class SettingsStore
     {
         try
         {
+            // Whatever changed a model, the active profile follows, so switching back finds it as it was left.
+            ModelProfiles.Active(settings)?.CaptureFrom(settings);
             SaveKeys(settings.Llm);
             var tmp = FilePath + ".tmp";
             File.WriteAllText(tmp, Serialize(settings)); // without the keys: they're [JsonIgnore]

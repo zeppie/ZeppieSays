@@ -321,7 +321,7 @@
 
                             <DockPanel Margin="16,0,16,16">
                                 <!-- Logo and wordmark: a bold "Zeppie", a lighter "Says" in the logo's purple. -->
-                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,48,0,28">
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,48,0,24">
                                     <Image Source="Assets/zeppie.png" Width="40" Height="40" VerticalAlignment="Center"
                                            RenderOptions.BitmapScalingMode="HighQuality" />
                                     <TextBlock FontSize="26" Margin="12,0,0,3" VerticalAlignment="Center"
@@ -330,6 +330,8 @@
                                         <Run Text="Says" FontWeight="Normal" Foreground="{StaticResource WordmarkAccent}" />
                                     </TextBlock>
                                 </StackPanel>
+                                <!-- Room for the profile picker, which the window puts here: inside this template it would be hidden from screen readers -->
+                                <Border DockPanel.Dock="Top" Height="52" Margin="0,0,0,20" />
                                 <DockPanel IsItemsHost="True" LastChildFill="False" />
                             </DockPanel>
 
@@ -1297,6 +1299,10 @@
                             </StackPanel>
                         </Border>
 
+                        <TextBlock Style="{StaticResource Caption}" Margin="4,0,4,12" TextWrapping="Wrap">
+                            <Run Text="The model and language of each key belong to the profile" />
+                            <Run Text="{Binding ActiveProfile.Name, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="; switch it at the top left or from the tray. The keys themselves and the language they type in are the same in every profile." />
+                        </TextBlock>
                         <ItemsControl ItemsSource="{Binding Keys}" />
                         <Button Command="{Binding AddKey}" HorizontalAlignment="Left" Margin="0,0,0,12" Padding="12,6"
                                 AutomationProperties.Name="Add a key">
@@ -1550,7 +1556,7 @@
 
             <!-- Styles -->
             <TabItem Header="Styles" Tag="&#xE8D2;" x:Name="StylesTab">
-                <!-- Every style in a list; the selected one in the editor beside it; the profile and default model above. Ollama and the keys are on the Settings page. -->
+                <!-- Every style in a list; the selected one in the editor beside it; the default model above. Ollama and the keys are on the Settings page. -->
                 <Grid DataContext="{Binding Styles}" Margin="0,4,18,16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -1566,35 +1572,17 @@
                     <Border Grid.ColumnSpan="3" Style="{StaticResource Card}" Margin="0,0,0,12">
                         <StackPanel>
                             <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,14" TextWrapping="Wrap">
-                                <Run Text="A style decides how your dictation is tidied up: by rules only, or rewritten by an AI. Each app or website can have its own. A profile holds the AI model of every style, so you can switch them all at once, for example between local and cloud. The Ollama address and API keys are under" />
+                                <Run Text="A style decides how your dictation is tidied up: by rules only, or rewritten by an AI. Each app or website can have its own. The default model and the model of each style belong to the profile" />
+                                <Run Text="{Binding DataContext.ActiveProfile.Name, Mode=OneWay, RelativeSource={RelativeSource AncestorType=Window}}" FontWeight="SemiBold" /><Run Text="; switch it at the top left. The Ollama address and API keys are under" />
                                 <Hyperlink Click="OpenAiProviders_Click">Settings, AI providers</Hyperlink><Run Text="." />
                             </TextBlock>
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="28" />
                                     <ColumnDefinition Width="1.4*" />
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="Profile" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding ActiveProfile}" DisplayMemberPath="Name"
-                                                  AutomationProperties.Name="Profile" />
-                                        <Button Grid.Column="1" Content="New" Command="{Binding AddProfile}" Margin="8,0,0,0"
-                                                ToolTip="A copy of this profile; change only what should differ" />
-                                        <Button Grid.Column="2" Content="Delete" Command="{Binding DeleteProfile}" IsEnabled="{Binding CanDeleteProfile}"
-                                                Margin="8,0,0,0" ToolTip="Removes this profile; the first one in the list takes over" />
-                                    </Grid>
-                                    <TextBlock Text="Name" Style="{StaticResource Caption}" Margin="0,12,0,4" />
-                                    <TextBox Text="{Binding ActiveProfile.Name, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Profile name" />
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="2">
                                     <TextBlock Text="Default model, used by every style unless it picks another" Style="{StaticResource Caption}"
                                                Margin="0,0,0,4" TextWrapping="Wrap" />
                                     <Grid>
@@ -1608,13 +1596,13 @@
                                         <ComboBox Grid.Column="2" IsEditable="True" ItemsSource="{Binding DefaultModelSuggestions}"
                                                   Text="{Binding DefaultModel, UpdateSourceTrigger=LostFocus}" />
                                     </Grid>
-                                    <StackPanel Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
-                                        <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,12,0,4" />
-                                        <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
-                                                  SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
-                                        <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
-                                                   Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
-                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Visibility="{Binding DefaultIsLocal, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="Keep the model loaded" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                    <ComboBox ItemsSource="{x:Static ui:StylesViewModel.KeepLoadedChoices}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" SelectedValue="{Binding KeepLoaded}" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="2,4,0,0" TextWrapping="Wrap"
+                                               Text="Longer means no loading pause after a break, but the model keeps using graphics memory (about 5 GB for qwen3:8b)." />
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
@@ -2006,7 +1994,7 @@
                             <StackPanel>
                                 <TextBlock Text="AI providers" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
                                 <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,14" TextWrapping="Wrap"
-                                           Text="Where the AI models run: Ollama on this PC, and the cloud services with your keys. Which model each style uses, and the profiles to switch them, are on the Styles page." />
+                                           Text="Where the AI models run: Ollama on this PC, and the cloud services with your keys. Which model each style uses is on the Styles page; the profile at the top left switches the models of all keys and styles at once." />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -2273,6 +2261,43 @@
                 </ScrollViewer>
             </TabItem>
         </TabControl>
+
+        <!-- The profile: which models the keys and styles use, switched all at once, on every page. Sits in the sidebar's room for it. -->
+        <StackPanel x:Name="ProfilePicker" HorizontalAlignment="Left" VerticalAlignment="Top" Width="220" Margin="24,112,0,0">
+            <TextBlock Text="Profile" Style="{StaticResource Caption}" Margin="2,0,0,4" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding ActiveProfile}" DisplayMemberPath="Name"
+                          AutomationProperties.Name="Profile"
+                          ToolTip="Which models the dictation keys and the styles use" />
+                <ToggleButton x:Name="ProfileMenuButton" Grid.Column="1" Margin="6,0,0,0" Padding="9,6"
+                              AutomationProperties.Name="Manage profiles" ToolTip="New, rename or delete a profile"
+                              IsChecked="{Binding IsOpen, ElementName=ProfileMenu}">
+                    <TextBlock Text="&#xE712;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" />
+                </ToggleButton>
+                <Popup x:Name="ProfileMenu" PlacementTarget="{Binding ElementName=ProfileMenuButton}" Placement="Bottom"
+                       HorizontalOffset="-200" StaysOpen="False" AllowsTransparency="True">
+                    <Border Style="{StaticResource Card}" Width="260" Margin="0,6,0,0"
+                            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                        <StackPanel>
+                            <TextBlock Text="Name" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                            <TextBox Text="{Binding ActiveProfile.Name, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Profile name" />
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button Content="New profile" Command="{Binding AddProfile}"
+                                        ToolTip="A copy of this profile; change only what should differ" />
+                                <Button Content="Delete" Command="{Binding DeleteProfile}" IsEnabled="{Binding CanDeleteProfile}"
+                                        Margin="8,0,0,0" ToolTip="Removes this profile; the first one in the list takes over" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource Caption}" Margin="0,12,0,0" TextWrapping="Wrap"
+                                       Text="A profile holds the speech model and language of every key, and the AI model of every style. What you change there is kept in the profile you're on." />
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Grid>
+        </StackPanel>
 
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal" Margin="0,4,4,0">
             <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize" Click="Minimize_Click" />

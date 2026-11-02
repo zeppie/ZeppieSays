@@ -91,14 +91,14 @@ public partial class App : Application
         _controller.Failed += message => Dispatcher.BeginInvoke(() => _overlay.ShowError(message));
         _controller.Rewriting += style => Dispatcher.BeginInvoke(() => _overlay.ShowRewriting(style));
 
-        CreateTray(model.Styles);
+        CreateTray(model);
 
         var background = e.Args.Contains("--background");
         if (!background || model.HasNoModels)
             ShowMainWindow();
     }
 
-    void CreateTray(StylesViewModel styles)
+    void CreateTray(MainViewModel main)
     {
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Open ZeppieSays", null, (_, _) => ShowMainWindow());
@@ -113,10 +113,10 @@ public partial class App : Application
         {
             copyUnedited.Enabled = _controller?.LastUnedited is { Length: > 0 };
             profiles.DropDownItems.Clear();
-            foreach (var profile in styles.Profiles)
-                profiles.DropDownItems.Add(new Forms.ToolStripMenuItem(profile.Name, null, (_, _) => styles.ActiveProfile = profile)
+            foreach (var profile in main.Profiles)
+                profiles.DropDownItems.Add(new Forms.ToolStripMenuItem(profile.Name, null, (_, _) => main.ActiveProfile = profile)
                 {
-                    Checked = profile == styles.ActiveProfile,
+                    Checked = profile == main.ActiveProfile,
                 });
         };
         menu.Items.Add(new Forms.ToolStripSeparator());
