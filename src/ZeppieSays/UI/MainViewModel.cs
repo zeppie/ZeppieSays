@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
@@ -57,6 +57,7 @@ public sealed class MainViewModel : ObservableObject
     public InsightsViewModel Insights { get; }
     public LoadedModelsViewModel Loaded { get; }
     public NotetakerViewModel Notetaker { get; }
+    public TodoViewModel Todo { get; }
     /// <summary>The dictation keys, in the order of <see cref="AppSettings.Keys"/>.</summary>
     public ObservableCollection<BindingViewModel> Keys { get; } = [];
     public ObservableCollection<Choice> InstalledModels { get; } = [];
@@ -77,7 +78,7 @@ public sealed class MainViewModel : ObservableObject
 
     public MainViewModel(AppSettings settings, ModelManager models, EngineCache engines, KeyboardHook hook, Llm.TextRewriter rewriter,
         UsageStore usage, Notes.Notetaker notetaker, Notes.Summarizer summarizer, Notes.VoiceLibrary voices,
-        MeetingController meetings, DictionaryFiles dictionaryFiles, DictationHistory history)
+        MeetingController meetings, DictionaryFiles dictionaryFiles, DictationHistory history, TodoClient todo)
     {
         _history = history;
         _voices = voices;
@@ -86,6 +87,7 @@ public sealed class MainViewModel : ObservableObject
         _models = models;
         _engines = engines;
         _hook = hook;
+        Todo = new TodoViewModel(settings, todo, Save);
         SetUpDictionaryFiles(dictionaryFiles);
         SetUpSettingsFolder();
         SetUpHistory();
@@ -749,6 +751,7 @@ public sealed class BindingViewModel : ObservableObject
                 ? ModelCatalog.Languages.FirstOrDefault(l => l.Code == _binding.OutputLanguage).Name ?? _binding.OutputLanguage
                 : null;
             if (_binding.Asks) return language is null ? "→ answers" : $"→ answers in {language}";
+            if (_binding.AddsTasks) return "→ To Do";
             return language is null ? "" : "→ " + language;
         }
     }
@@ -764,6 +767,7 @@ public sealed class BindingViewModel : ObservableObject
     [
         new(nameof(KeyAction.Type), "Type the text"),
         new(nameof(KeyAction.Ask), "Ask a question"),
+        new(nameof(KeyAction.Task), "Add a task to To Do"),
     ];
 
     public static IReadOnlyList<Choice> AskProviders { get; } =
@@ -788,8 +792,13 @@ public sealed class BindingViewModel : ObservableObject
 
     public bool Asks => _binding.Asks;
 
-    /// <summary>An Ask key answers in the chosen language rather than typing in it.</summary>
-    public string OutputCaption => _binding.Asks ? "Answer in" : "It types";
+    /// <summary>An Ask key's answer and a task key's task both come from a model of their own choosing.</summary>
+    public bool UsesModel => _binding.Asks || _binding.AddsTasks;
+
+    public string ModelCaption => _binding.AddsTasks ? "Read by" : "Answered by";
+
+    /// <summary>An Ask key answers in the chosen language rather than typing in it; a task key writes the task in it.</summary>
+    public string OutputCaption => _binding.Asks ? "Answer in" : _binding.AddsTasks ? "Task in" : "It types";
 
     public string AskProvider
     {
@@ -835,6 +844,12 @@ public sealed class BindingViewModel : ObservableObject
         get
         {
             var answerer = _owner.Styles.Effective(new Style { Provider = _binding.AskProvider, Model = _binding.AskModel });
+            if (_binding.AddsTasks)
+                return (answerer.Provider == LlmProvider.Ollama
+                           ? $"{answerer.Model} on this PC reads the task"
+                           : $"The spoken task goes to {answerer.Provider} ({answerer.Model}) to be read") +
+                       ": title, list, due date, reminder, importance, notes, steps and repeat. It's added to Microsoft To Do " +
+                       "(sign in under Settings). \"Today\" or \"my day\" gives it today as its due date.";
             const string sent = "Your question, the selected text and the text on screen go to";
             return answerer.Provider switch
             {
@@ -858,6 +873,8 @@ public sealed class BindingViewModel : ObservableObject
         Raise(nameof(ModelName));
         Raise(nameof(Action));
         Raise(nameof(Asks));
+        Raise(nameof(UsesModel));
+        Raise(nameof(ModelCaption));
         Raise(nameof(OutputCaption));
         Raise(nameof(OutputLabel));
         Raise(nameof(AskProvider));

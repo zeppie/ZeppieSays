@@ -23,6 +23,12 @@ Press a key anywhere, talk, and the text lands where your cursor is.
   cursor; Esc or × closes it. The selected text, the text around the cursor and the window's text (OCR) go along with
   the question. Each Ask key has its own answering model (kept in the profile): Claude and OpenAI search the web when
   needed and show their sources; Ollama answers on this PC without searching.
+- **Add a task to Microsoft To Do.** Set a key's "What it does" to *Add a task to To Do* and say it: "call Anna
+  Friday at nine about the quote, important", "milk, bread and eggs on the shopping list", "every Monday at half past
+  eight the weekly planning". The key's model reads the title, list, due date, reminder, importance, notes, steps and
+  repeat; a card shows the task with Open in To Do and Undo. "Today" or "my day" gives it today as its due date
+  (Microsoft Graph can't put a task in My Day itself). Claude Haiku reads tasks reliably; small local models get
+  dates and repeats wrong. Sign in under Settings, Microsoft To Do, with your own app registration (the steps are there).
 - **A small pill** at the bottom of the screen shows the key, the waveform and the model while you talk.
   The finished text is inserted in one go when you stop.
 - **Dictionary.** Words you use a lot get the right spelling. `Betabit` alone works, and

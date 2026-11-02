@@ -122,6 +122,33 @@ switch (args.FirstOrDefault())
         break;
     }
 
+    case "task": // probe task "<spoken task>" ["list1;list2"]  — read as a task key would; shows what To Do would get, makes nothing
+    {
+        if (Environment.GetEnvironmentVariable("ZS_PROFILE") is { Length: > 0 } profileName)
+            settings.Profiles.First(p => p.Name == profileName).ApplyTo(settings);
+        var key = settings.Keys.FirstOrDefault(k => k.AddsTasks) ?? new KeyBinding { Action = KeyAction.Task };
+        var (provider, model) = new ZeppieSays.Llm.Answerer(settings).Resolve(key);
+        // ZS_MODEL: try another Ollama model, for comparisons.
+        if (Environment.GetEnvironmentVariable("ZS_MODEL") is { Length: > 0 } otherModel) (provider, model) = (LlmProvider.Ollama, otherModel);
+        if (new ZeppieSays.Llm.TextRewriter(settings).CreateModel(new Style { Provider = provider, Model = model }) is not { } chat)
+        {
+            Console.WriteLine($"No API key for {provider}");
+            break;
+        }
+        var lists = (args.Length > 2 ? args[2] : "Tasks;Boodschappen;Werk").Split(';');
+        var now = DateTime.Now;
+        var watch = Stopwatch.StartNew();
+        var reply = await chat.CompleteAsync(ZeppieSays.Llm.TaskReader.SystemPrompt(now, lists), ZeppieSays.Llm.TaskReader.UserMessage(args[1]), CancellationToken.None);
+        var task = ZeppieSays.Llm.TaskReader.Parse(reply, args[1], lists, now);
+        Console.WriteLine($"{provider} {model} in {watch.ElapsedMilliseconds} ms");
+        Console.WriteLine($"title: {task.Title}");
+        Console.WriteLine($"       {ZeppieSays.Llm.TaskReader.Describe(task, null)}");
+        if (task.Notes is { } notes) Console.WriteLine($"notes: {notes}");
+        foreach (var step in task.StepList) Console.WriteLine($"step:  {step}");
+        Console.WriteLine(TodoClient.TaskBody(task, TimeZoneInfo.Local.Id).ToJsonString());
+        break;
+    }
+
     case "card": // probe card "<question>" "<selected text>" <out.png>  — the answer card as the app shows it, saved as an image
     {
         if (Environment.GetEnvironmentVariable("ZS_PROFILE") is { Length: > 0 } profileName)
@@ -131,7 +158,7 @@ switch (args.FirstOrDefault())
         var ui = new Thread(() =>
         {
             var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
-            var card = new ZeppieSays.UI.AnswerWindow(new ZeppieSays.Llm.Answerer(settings));
+            var card = new ZeppieSays.UI.AnswerWindow(new ZeppieSays.Llm.Answerer(settings), new ZeppieSays.Llm.TextRewriter(settings), new TodoClient(settings));
             // From inside the message loop, as the app does, so the card's awaits come back to the UI thread.
             app.Dispatcher.BeginInvoke(() => card.Ask(args[1], context, key));
             // Long enough for a web search; then a picture of the card, drawn on its own (no desktop behind it).

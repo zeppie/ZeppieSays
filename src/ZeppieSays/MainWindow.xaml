@@ -490,12 +490,12 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <TextBlock Text="What it does" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                        <TextBlock Grid.Column="1" Text="Answered by" Style="{StaticResource Caption}" Margin="8,0,0,4"
-                                   Visibility="{Binding Asks, Converter={StaticResource Visible}}" />
+                        <TextBlock Grid.Column="1" Text="{Binding ModelCaption}" Style="{StaticResource Caption}" Margin="8,0,0,4"
+                                   Visibility="{Binding UsesModel, Converter={StaticResource Visible}}" />
                         <ComboBox Grid.Row="1" ItemsSource="{x:Static ui:BindingViewModel.Actions}" DisplayMemberPath="Label"
                                   SelectedValuePath="Value" SelectedValue="{Binding Action}" AutomationProperties.Name="What it does"
                                   ToolTip="Ask a question: what you say is answered in a card above the pill, using what's selected and on screen" />
-                        <Grid Grid.Row="1" Grid.Column="1" Margin="8,0,0,0" Visibility="{Binding Asks, Converter={StaticResource Visible}}">
+                        <Grid Grid.Row="1" Grid.Column="1" Margin="8,0,0,0" Visibility="{Binding UsesModel, Converter={StaticResource Visible}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="1.2*" />
                                 <ColumnDefinition Width="8" />
@@ -509,7 +509,7 @@
                         </Grid>
                     </Grid>
                     <TextBlock Text="{Binding AskNotice}" Style="{StaticResource Caption}" Margin="2,6,0,0" TextWrapping="Wrap"
-                               Visibility="{Binding Asks, Converter={StaticResource Visible}}" />
+                               Visibility="{Binding UsesModel, Converter={StaticResource Visible}}" />
                     <TextBlock Text="{Binding KeyProblem}" Foreground="#E5484D" FontSize="12" Margin="2,6,0,0" TextWrapping="Wrap">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
@@ -2075,6 +2075,44 @@
                                                    Text="Keys stay on this PC, also when your settings folder is in OneDrive." />
                                     </StackPanel>
                                 </Grid>
+                            </StackPanel>
+                        </Border>
+                        <!-- Microsoft To Do, for keys that add a task -->
+                        <Border Style="{StaticResource Card}" DataContext="{Binding Todo}">
+                            <StackPanel>
+                                <TextBlock Text="Microsoft To Do" Style="{StaticResource SectionTitle}" Margin="0,0,0,2" />
+                                <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,14" TextWrapping="Wrap"
+                                           Text="For a key that adds a task (Keys page, What it does). ZeppieSays signs in with your Microsoft account through your own app registration; the sign-in stays on this PC, encrypted for your Windows account." />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1.4*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Application (client) ID" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding ClientId, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Application (client) ID" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Directory (tenant) ID or domain" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                                        <TextBox Text="{Binding Tenant, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Directory (tenant) ID or domain" />
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="Sign in with Microsoft" Command="{Binding SignIn}" IsEnabled="{Binding CanSignIn}"
+                                            Style="{DynamicResource AccentButtonStyle}" />
+                                    <Button Content="Sign out" Command="{Binding SignOut}" Margin="8,0,0,0"
+                                            Visibility="{Binding IsSignedIn, Converter={StaticResource Visible}}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding Status}" Style="{StaticResource Caption}" Margin="2,8,0,0" TextWrapping="Wrap" />
+                                <Expander Header="How to make the app registration (once)" Margin="0,12,0,0">
+                                    <TextBlock Style="{StaticResource Caption}" Margin="4,8,0,0" TextWrapping="Wrap" LineHeight="20">
+                                        <Run Text="1. On entra.microsoft.com, open App registrations and choose New registration. Name it ZeppieSays; supported accounts: this organization only." /><LineBreak />
+                                        <Run Text="2. Under Authentication, add a platform: Mobile and desktop applications (not Web), with the redirect URI http://localhost. Leave Allow public client flows off: the browser sign-in doesn't need it." /><LineBreak />
+                                        <Run Text="3. Under API permissions, add Microsoft Graph, Delegated: Tasks.ReadWrite (User.Read is there already). If your organization asks for it, have an administrator grant consent." /><LineBreak />
+                                        <Run Text="4. Copy the Application (client) ID and the Directory (tenant) ID from the Overview into the boxes above, and sign in." />
+                                    </TextBlock>
+                                </Expander>
                             </StackPanel>
                         </Border>
                         <!-- Where the user's own data lives -->

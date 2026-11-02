@@ -41,6 +41,8 @@ public sealed class DictationController : IDisposable
     public event Action<string>? Rewriting;
     /// <summary>An Ask key's question, with what was on screen, for the answer card.</summary>
     public event Action<string, ScreenContext, KeyBinding>? Asked;
+    /// <summary>A task key's spoken task, for the card that adds it to Microsoft To Do.</summary>
+    public event Action<string, KeyBinding>? TaskSpoken;
 
     /// <summary>
     /// Esc while no dictation runs, e.g. to close the answer card. Called on the key hook's thread, so it must return
@@ -205,6 +207,12 @@ public sealed class DictationController : IDisposable
                          $"{context.SelectedText?.Length ?? 0} selected{(copiedSelection ? " (copied)" : "")}, " +
                          $"{context.WindowText?.Length ?? 0} on screen");
                 if (spoken.Length > 0) Asked?.Invoke(spoken, context, binding);
+                return;
+            }
+            if (binding.AddsTasks)
+            {
+                Log.Info($"Task spoken: {spoken.Length} chars");
+                if (spoken.Length > 0) TaskSpoken?.Invoke(spoken, binding);
                 return;
             }
 

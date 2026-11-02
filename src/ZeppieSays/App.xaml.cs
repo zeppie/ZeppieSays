@@ -77,9 +77,10 @@ public partial class App : Application
         _notetaker = new Notes.Notetaker(_settings, _engines, _models, summarizer, voices,
             () => controller.State != DictationState.Idle, Dispatcher);
         _meetings = new MeetingController(_settings, Dispatcher);
+        var todo = new TodoClient(_settings);
 
         var model = new MainViewModel(_settings, _models, _engines, _hook, rewriter, usage, _notetaker, summarizer, voices, _meetings,
-            _dictionaryFiles, history);
+            _dictionaryFiles, history, todo);
         model.Notetaker.Start();
         _window = new MainWindow(model);
         _overlay = new OverlayWindow();
@@ -91,9 +92,10 @@ public partial class App : Application
         _controller.Failed += message => Dispatcher.BeginInvoke(() => _overlay.ShowError(message));
         _controller.Rewriting += style => Dispatcher.BeginInvoke(() => _overlay.ShowRewriting(style));
 
-        // An Ask key's answer, in a card where the pill was; Esc closes it while no dictation runs.
-        var answer = new AnswerWindow(new Llm.Answerer(_settings));
+        // An Ask key's answer, or a task key's new task, in a card where the pill was; Esc closes it while no dictation runs.
+        var answer = new AnswerWindow(new Llm.Answerer(_settings), rewriter, todo);
         _controller.Asked += (question, context, key) => Dispatcher.BeginInvoke(() => answer.Ask(question, context, key));
+        _controller.TaskSpoken += (task, key) => Dispatcher.BeginInvoke(() => answer.AddTask(task, key));
         _controller.EscapeWhenIdle = () =>
         {
             if (!answer.IsOpen) return false;

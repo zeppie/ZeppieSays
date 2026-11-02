@@ -11,6 +11,8 @@ public enum KeyAction
     Type,
     /// <summary>Takes it as a question and shows the answer in a card above the pill.</summary>
     Ask,
+    /// <summary>Turns it into a task in Microsoft To Do: title, list, due date, reminder and the rest, read from what was said.</summary>
+    Task,
 }
 
 /// <summary>One dictation key: which key starts it, which model transcribes, in which language, and what language comes out.</summary>
@@ -32,12 +34,15 @@ public sealed class KeyBinding
     public bool Translates => OutputLanguage is { Length: > 0 } and not SameLanguage;
 
     public KeyAction Action { get; set; } = KeyAction.Type;
-    /// <summary>Who answers an Ask key's questions. Default means the default model (Styles page).</summary>
+    /// <summary>
+    /// Who answers an Ask key's questions, or reads a task key's task. Default means the default model (Styles page).
+    /// </summary>
     public LlmProvider AskProvider { get; set; } = LlmProvider.Default;
     /// <summary>Only with a provider of its own; unused with the default model.</summary>
     public string AskModel { get; set; } = "";
 
     public bool Asks => Action == KeyAction.Ask;
+    public bool AddsTasks => Action == KeyAction.Task;
 }
 
 public sealed class DictionaryEntry
@@ -114,6 +119,19 @@ public sealed class AppSettings
     /// <summary>Whisper ggml files the user added by hand, outside the built-in catalog.</summary>
     public List<CustomModel> CustomModels { get; set; } = [];
     public NotetakerSettings Notetaker { get; set; } = new();
+    public TodoSettings Todo { get; set; } = new();
+}
+
+/// <summary>
+/// Adding tasks to Microsoft To Do through Microsoft Graph. The app registration is the user's own (in their Entra or
+/// on entra.microsoft.com); the sign-in itself is kept on this PC, never in settings.json.
+/// </summary>
+public sealed class TodoSettings
+{
+    /// <summary>The Application (client) ID of the app registration.</summary>
+    public string ClientId { get; set; } = "";
+    /// <summary>The Directory (tenant) ID or domain, e.g. betabit.nl; "organizations" for any work account.</summary>
+    public string Tenant { get; set; } = "organizations";
 }
 
 /// <summary>Transcribing audio files: every audio file put in <see cref="Folder"/> is transcribed and moved to Done.</summary>
