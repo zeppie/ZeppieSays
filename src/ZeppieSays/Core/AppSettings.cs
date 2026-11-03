@@ -145,6 +145,11 @@ public sealed class NotetakerSettings
     public bool LabelSpeakers { get; set; } = true;
     /// <summary>How many people speak, when known (more reliable); 0 lets Zeppie Says work it out.</summary>
     public int Speakers { get; set; }
+    /// <summary>
+    /// With ElevenLabs as the speech model: let ElevenLabs tell the speakers apart (the audio goes there anyway)
+    /// instead of the speaker models on this PC. Ignored for other speech models.
+    /// </summary>
+    public bool CloudSpeakers { get; set; }
     /// <summary>The finer settings of speaker detection; each file starts with a copy it can change.</summary>
     public Notes.SpeakerSettings SpeakerDetection { get; set; } = new();
     /// <summary>The model that tells voices apart and recognises named people (<see cref="Notes.VoiceModel"/>).</summary>

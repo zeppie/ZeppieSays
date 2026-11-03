@@ -29,6 +29,13 @@ public sealed class ElevenLabsEngine(string name, string modelId, string apiKey)
         };
         if (request.Language is { Length: > 0 } language && language != "auto")
             form.Add(new StringContent(language), "language_code");
+        if (request.DetectSpeakers)
+        {
+            form.Add(new StringContent("true"), "diarize");
+            // ElevenLabs takes 1 to 32 speakers; leaving it out lets the model decide.
+            if (request.SpeakerCount is >= 1 and <= 32)
+                form.Add(new StringContent(request.SpeakerCount.ToString()), "num_speakers");
+        }
         // A list goes as one form field per term. Key terms add 20% to the price, so they're only sent when there are some.
         foreach (var term in request.KeyTerms ?? [])
             form.Add(new StringContent(term), "keyterms");
@@ -48,11 +55,16 @@ public sealed class ElevenLabsEngine(string name, string modelId, string apiKey)
         var words = (json?["words"] as JsonArray ?? [])
             .Where(w => w?["type"]?.GetValue<string>() == "word")
             .Select(w => new TimedWord(w!["text"]!.GetValue<string>().Trim(),
-                w["start"]?.GetValue<double>() ?? 0, w["end"]?.GetValue<double>() ?? 0))
+                w["start"]?.GetValue<double>() ?? 0, w["end"]?.GetValue<double>() ?? 0,
+                request.DetectSpeakers ? SpeakerNumber(w["speaker_id"]?.GetValue<string>()) : null))
             .Where(w => w.Text.Length > 0)
             .ToList();
         return (text, words);
     }
+
+    /// <summary>ElevenLabs names speakers "speaker_0", "speaker_1", …</summary>
+    static int? SpeakerNumber(string? id) =>
+        id is not null && int.TryParse(id[(id.LastIndexOf('_') + 1)..], out var n) ? n : null;
 
     static byte[] ToPcm16(float[] samples)
     {

@@ -156,6 +156,7 @@ public sealed partial class NotetakerViewModel : ObservableObject
             Options.ModelId = value;
             _save();
             Raise();
+            Raise(nameof(CanPickSpeakerSource));
         }
     }
 
@@ -170,6 +171,15 @@ public sealed partial class NotetakerViewModel : ObservableObject
         get => Options.LabelSpeakers;
         set { Options.LabelSpeakers = value; _save(); Raise(); }
     }
+
+    /// <summary>Who tells the speakers apart: this PC, or ElevenLabs while it is the speech model.</summary>
+    public string SpeakerSourceChoice
+    {
+        get => Options.CloudSpeakers ? SpeakerSources.Cloud : SpeakerSources.Local;
+        set { if (value is null) return; Options.CloudSpeakers = value == SpeakerSources.Cloud; _save(); Raise(); }
+    }
+
+    public bool CanPickSpeakerSource => SpeakerSources.IsElevenLabs(Options.ModelId);
 
     public static IReadOnlyList<Choice> SpeakerCounts { get; } =
         [new("0", "Auto"), .. Enumerable.Range(2, 14).Select(n => new Choice(n.ToString(), $"{n} people"))];

@@ -967,6 +967,13 @@
                                                   IsEnabled="{Binding Selected.Options.LabelSpeakers}" VerticalAlignment="Center"
                                                   ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
                                     </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding Selected.Options.CanPickSpeakerSource, Converter={StaticResource Visible}}"
+                                                IsEnabled="{Binding Selected.Options.LabelSpeakers}">
+                                        <TextBlock Text="Speakers found by" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <ComboBox ItemsSource="{x:Static notes:SpeakerSources.All}" DisplayMemberPath="Label"
+                                                  SelectedValuePath="Value" SelectedValue="{Binding Selected.Options.SpeakerSourceChoice}" MinWidth="170"
+                                                  ToolTip="ElevenLabs transcribes and tells the speakers apart in one go. Named people are still recognised when the speaker models are on this PC." />
+                                    </StackPanel>
                                     <Expander Header="Speaker detection (advanced)" Margin="0,10,0,0" IsEnabled="{Binding Selected.Options.LabelSpeakers}"
                                               IsExpanded="{Binding Selected.IsRedo, Mode=OneWay}">
                                         <StackPanel Margin="0,10,0,4">
@@ -1952,6 +1959,13 @@
                                                   SelectedValuePath="Value" SelectedValue="{Binding Speakers}" MinWidth="104" Margin="0,0,20,4"
                                                   IsEnabled="{Binding LabelSpeakers}" VerticalAlignment="Center"
                                                   ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,20,4" IsEnabled="{Binding LabelSpeakers}"
+                                                    Visibility="{Binding CanPickSpeakerSource, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="found by" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox ItemsSource="{x:Static notes:SpeakerSources.All}" DisplayMemberPath="Label"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding SpeakerSourceChoice}" MinWidth="150"
+                                                      ToolTip="With ElevenLabs as the model, ElevenLabs can tell the speakers apart instead of the models on this PC" />
+                                        </StackPanel>
                                         <CheckBox Content="Summary and action items" IsChecked="{Binding Summarize}" Margin="0,0,20,4"
                                                   ToolTip="Written by your default style model (Styles page)" />
                                         <CheckBox Content="Dictionary hints" IsChecked="{Binding UseDictionary}" Margin="0,0,0,4"

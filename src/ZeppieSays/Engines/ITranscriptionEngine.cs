@@ -7,10 +7,17 @@ public sealed record TranscriptionRequest(
     /// <summary>Vocabulary and preceding text to steer models that accept a prompt. May be empty.</summary>
     string Prompt,
     /// <summary>Words to listen for, for models that take a list instead of a prompt (ElevenLabs). Null when there are none.</summary>
-    IReadOnlyList<string>? KeyTerms = null);
+    IReadOnlyList<string>? KeyTerms = null,
+    /// <summary>Asks the model to tell the speakers apart (ElevenLabs); the words then carry a <see cref="TimedWord.Speaker"/>.</summary>
+    bool DetectSpeakers = false,
+    /// <summary>How many people speak, when known; 0 lets the model work it out.</summary>
+    int SpeakerCount = 0);
 
-/// <summary>A word as the speech model heard it, with when it was said (seconds into the samples it was given).</summary>
-public sealed record TimedWord(string Text, double Start, double End);
+/// <summary>
+/// A word as the speech model heard it, with when it was said (seconds into the samples it was given).
+/// Speaker is the model's own number for who said it, only when it was asked to detect speakers.
+/// </summary>
+public sealed record TimedWord(string Text, double Start, double End, int? Speaker = null);
 
 public interface ITranscriptionEngine : IDisposable
 {
