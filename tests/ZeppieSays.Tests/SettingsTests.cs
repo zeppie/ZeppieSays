@@ -72,8 +72,8 @@ public class SettingsTests
     }
 
     [Theory]
-    [InlineData("Betabit", "Betabit", 0)]
-    [InlineData("  Betabit = beta bit, beta bid  ", "Betabit", 2)]
+    [InlineData("Lumora", "Lumora", 0)]
+    [InlineData("  Lumora = lu mora, loo mora  ", "Lumora", 2)]
     [InlineData("userId = user id", "userId", 1)]
     public void Dictionary_lines_parse(string line, string term, int soundsLike)
     {
@@ -96,10 +96,10 @@ public class SettingsTests
         var path = Path.Combine(Path.GetTempPath(), $"zs-dict-{Guid.NewGuid():N}.txt");
         try
         {
-            DictionaryFiles.Write(path, [new DictionaryEntry { Term = "Betabit", SoundsLike = ["beta bit"] }], "Team words\nsecond line");
+            DictionaryFiles.Write(path, [new DictionaryEntry { Term = "Lumora", SoundsLike = ["lu mora"] }], "Team words\nsecond line");
             File.AppendAllLines(path, ["", "# later comment", "ZeppieSays"]);
             var words = DictionaryFiles.Read(path);
-            Assert.Equal(["Betabit", "ZeppieSays"], words.Select(w => w.Term));
+            Assert.Equal(["Lumora", "ZeppieSays"], words.Select(w => w.Term));
             Assert.All(words, w => Assert.Equal(Path.GetFileNameWithoutExtension(path), w.Source));
         }
         finally
@@ -111,8 +111,8 @@ public class SettingsTests
     [Fact]
     public void Words_from_dictionary_files_fix_spelling_too()
     {
-        var settings = new AppSettings { FileWords = [new DictionaryEntry { Term = "Betabit", SoundsLike = ["beta bit"] }] };
-        Assert.Equal("I work at Betabit.", TextShaping.Clean("I work at beta bit.", settings, ScreenContext.Empty));
+        var settings = new AppSettings { FileWords = [new DictionaryEntry { Term = "Lumora", SoundsLike = ["lu mora"] }] };
+        Assert.Equal("I work at Lumora.", TextShaping.Clean("I work at lu mora.", settings, ScreenContext.Empty));
     }
 
     static string TempFile(params string[] lines)
@@ -125,11 +125,11 @@ public class SettingsTests
     [Fact]
     public void Adding_a_word_keeps_the_rest_of_the_file()
     {
-        var path = TempFile("# Team words", "# keep this comment", "", "Betabit", "DELA");
+        var path = TempFile("# Team words", "# keep this comment", "", "Lumora", "DELA");
         try
         {
             DictionaryFiles.AddWordTo(path, new DictionaryEntry { Term = "Zeppie" });
-            Assert.Equal(["# Team words", "# keep this comment", "", "Betabit", "DELA", "Zeppie"], File.ReadAllLines(path));
+            Assert.Equal(["# Team words", "# keep this comment", "", "Lumora", "DELA", "Zeppie"], File.ReadAllLines(path));
         }
         finally { File.Delete(path); }
     }
@@ -137,11 +137,11 @@ public class SettingsTests
     [Fact]
     public void Adding_a_word_again_replaces_its_line_instead_of_duplicating_it()
     {
-        var path = TempFile("# words", "betabit", "DELA", "Betabit = beta bid");
+        var path = TempFile("# words", "lumora", "DELA", "Lumora = loo mora");
         try
         {
-            DictionaryFiles.AddWordTo(path, DictionaryEntry.Parse("Betabit = beta bit, beta bid")!);
-            Assert.Equal(["# words", "Betabit = beta bit, beta bid", "DELA"], File.ReadAllLines(path));
+            DictionaryFiles.AddWordTo(path, DictionaryEntry.Parse("Lumora = lu mora, loo mora")!);
+            Assert.Equal(["# words", "Lumora = lu mora, loo mora", "DELA"], File.ReadAllLines(path));
         }
         finally { File.Delete(path); }
     }
@@ -149,10 +149,10 @@ public class SettingsTests
     [Fact]
     public void Removing_a_word_removes_only_its_lines()
     {
-        var path = TempFile("# words", "Betabit = beta bit", "DELA", "# DELA in a comment stays");
+        var path = TempFile("# words", "Lumora = lu mora", "DELA", "# DELA in a comment stays");
         try
         {
-            DictionaryFiles.RemoveWordFrom(path, "betabit");
+            DictionaryFiles.RemoveWordFrom(path, "lumora");
             Assert.Equal(["# words", "DELA", "# DELA in a comment stays"], File.ReadAllLines(path));
         }
         finally { File.Delete(path); }

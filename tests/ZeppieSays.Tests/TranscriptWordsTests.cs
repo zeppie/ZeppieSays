@@ -11,9 +11,9 @@ public class TranscriptWordsTests
     [Fact]
     public void Joins_Whisper_tokens_into_words()
     {
-        // Whisper marks the start of a word with a space; "Beta" + "bit" is one word.
-        var words = TimedWords.FromTokens([(" Ik", 0.0, 0.2), (" werk", 0.2, 0.5), (" bij", 0.5, 0.6), (" Beta", 0.6, 0.8), ("bit", 0.8, 1.0), (".", 1.0, 1.0)]);
-        Assert.Equal(["Ik", "werk", "bij", "Betabit."], words.Select(w => w.Text));
+        // Whisper marks the start of a word with a space; "Lu" + "mora" is one word.
+        var words = TimedWords.FromTokens([(" Ik", 0.0, 0.2), (" werk", 0.2, 0.5), (" bij", 0.5, 0.6), (" Lu", 0.6, 0.8), ("mora", 0.8, 1.0), (".", 1.0, 1.0)]);
+        Assert.Equal(["Ik", "werk", "bij", "Lumora."], words.Select(w => w.Text));
         Assert.Equal((0.6, 1.0), (words[3].Start, words[3].End));
     }
 

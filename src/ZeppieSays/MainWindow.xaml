@@ -1558,7 +1558,7 @@
                     <TextBox Grid.Row="1" x:Name="WordBox" Text="{Binding NewWord, UpdateSourceTrigger=PropertyChanged}" KeyDown="WordBox_KeyDown"
                              AutomationProperties.Name="New word" />
                     <TextBlock Grid.Row="2" Style="{StaticResource Caption}" Margin="4,6,4,10"
-                               Text="Type a word and press Enter. To fix a word that keeps coming out wrong, write it as  Betabit = beta bit, beta bid" />
+                               Text="Type a word and press Enter. To fix a word that keeps coming out wrong, write it as  Lumora = lu mora, loo mora" />
                     <ListBox Grid.Row="3" ItemsSource="{Binding Dictionary}" BorderThickness="0" Background="Transparent"
                              HorizontalContentAlignment="Stretch">
                         <ListBox.ItemTemplate>

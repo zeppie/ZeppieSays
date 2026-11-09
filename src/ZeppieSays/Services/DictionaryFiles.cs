@@ -117,7 +117,7 @@ public sealed class DictionaryFiles : IDisposable
 
     const string DefaultHeader =
         "Zeppie Says dictionary: one word per line.\n" +
-        "To fix a word the model keeps getting wrong: Betabit = beta bit, beta bid\n" +
+        "To fix a word the model keeps getting wrong: Lumora = lu mora, loo mora\n" +
         "Lines starting with # are ignored. Edit it in Zeppie Says or in any text editor.";
 
     /// <summary>

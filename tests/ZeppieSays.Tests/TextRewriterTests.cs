@@ -169,7 +169,7 @@ public class TextRewriterTests
     [Theory]
     [InlineData("ik denk dat we morgen kunnen beginnen met de planning", "nl")]
     [InlineData("I think we can start with the planning tomorrow", "en")]
-    [InlineData("Betabit", null)]
+    [InlineData("Lumora", null)]
     [InlineData("Wir können morgen anfangen", null)]
     public void Guesses_dutch_or_english(string text, string? expected) =>
         Assert.Equal(expected, TextRewriter.GuessLanguage(text));
@@ -178,10 +178,10 @@ public class TextRewriterTests
     public void Prompt_names_the_language_and_the_users_rules()
     {
         var style = new Style { Strength = Strength.Light, Instructions = "No sign-off." };
-        var prompt = TextRewriter.BuildSystemPrompt(style, In("ms-teams", "Chat"), [new DictionaryEntry { Term = "Betabit" }], "nl");
+        var prompt = TextRewriter.BuildSystemPrompt(style, In("ms-teams", "Chat"), [new DictionaryEntry { Term = "Lumora" }], "nl");
         Assert.Contains("The dictation is in Dutch", prompt);
         Assert.Contains("No sign-off.", prompt);
-        Assert.Contains("Betabit", prompt);
+        Assert.Contains("Lumora", prompt);
         Assert.Contains("ms-teams", prompt);
     }
 
@@ -189,11 +189,11 @@ public class TextRewriterTests
     public void Translating_asks_for_the_target_language_instead_of_forbidding_it()
     {
         var style = new Style { Strength = Strength.Light };
-        var prompt = TextRewriter.BuildSystemPrompt(style, In("olk", "Mail"), [new DictionaryEntry { Term = "Betabit" }], "nl", "en");
+        var prompt = TextRewriter.BuildSystemPrompt(style, In("olk", "Mail"), [new DictionaryEntry { Term = "Lumora" }], "nl", "en");
         Assert.Contains("Translate it into English", prompt);
         Assert.DoesNotContain("Never translate", prompt);
         Assert.DoesNotContain("Examples:", prompt); // same-language examples would pull the reply back to Dutch
-        Assert.Contains("Betabit", prompt);
+        Assert.Contains("Lumora", prompt);
     }
 
     [Fact]

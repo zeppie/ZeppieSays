@@ -78,8 +78,8 @@ public class TranscriptEditingTests
     [Fact]
     public void Finds_a_misheard_phrase_that_was_fixed()
     {
-        var changes = WordDiff.Changes("We use beta bid for this.", "We use Betabit for this.");
-        Assert.Equal([new WordChange("beta bid", "Betabit")], changes);
+        var changes = WordDiff.Changes("We use loo mora for this.", "We use Lumora for this.");
+        Assert.Equal([new WordChange("loo mora", "Lumora")], changes);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class TranscriptEditingTests
         Assert.Empty(WordDiff.Changes("one two three", "alpha beta gamma delta epsilon"));
         Assert.Empty(WordDiff.DictionaryCandidates("It is fine.", "It is really fine."));
         Assert.Equal([new WordChange("", "Aurora")], WordDiff.DictionaryCandidates("It is late.", "It is late Aurora."));
-        Assert.Equal([new WordChange("beta bid", "Betabit")], WordDiff.DictionaryCandidates("at beta bid today", "at Betabit today"));
+        Assert.Equal([new WordChange("loo mora", "Lumora")], WordDiff.DictionaryCandidates("at loo mora today", "at Lumora today"));
     }
 
     [Fact]

@@ -55,7 +55,7 @@ public sealed class DictionaryEntry
     /// <summary>The dictionary file the word comes from; null for the user's own words in settings.json.</summary>
     [JsonIgnore] public string? Source { get; set; }
 
-    /// <summary>"Betabit" or "Betabit = beta bit, beta bid"; null for an empty line or a "# comment".</summary>
+    /// <summary>"Lumora" or "Lumora = lu mora, loo mora"; null for an empty line or a "# comment".</summary>
     public static DictionaryEntry? Parse(string line)
     {
         line = line.Trim();
@@ -130,7 +130,7 @@ public sealed class TodoSettings
 {
     /// <summary>The Application (client) ID of the app registration.</summary>
     public string ClientId { get; set; } = "";
-    /// <summary>The Directory (tenant) ID or domain, e.g. betabit.nl; "organizations" for any work account.</summary>
+    /// <summary>The Directory (tenant) ID or domain, e.g. lumora.nl; "organizations" for any work account.</summary>
     public string Tenant { get; set; } = "organizations";
 }
 

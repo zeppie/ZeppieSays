@@ -288,7 +288,7 @@ public sealed class MainViewModel : ObservableObject
     }
     string _newWord = "";
 
-    /// <summary>"Betabit" or "Betabit = beta bit, beta bid", into the selected dictionary file.</summary>
+    /// <summary>"Lumora" or "Lumora = lu mora, loo mora", into the selected dictionary file.</summary>
     public void AddWord()
     {
         if (DictionaryEntry.Parse(NewWord) is not { } entry || SelectedDictionaryFile is not { } file) return;
@@ -497,7 +497,7 @@ public sealed class MainViewModel : ObservableObject
 
     const string FileHeader =
         "Zeppie Says dictionary: one word per line.\n" +
-        "To fix a word the model keeps getting wrong: Betabit = beta bit, beta bid\n" +
+        "To fix a word the model keeps getting wrong: Lumora = lu mora, loo mora\n" +
         "Lines starting with # are ignored. Changes are picked up as soon as the file is saved.";
 
     /// <summary>The file whose words the left side shows and edits; the default file at first.</summary>

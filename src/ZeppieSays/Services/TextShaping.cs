@@ -100,7 +100,7 @@ public static partial class TextShaping
         foreach (var variant in variants)
             text = Replace(text, FlexiblePattern(variant), entry.Term, () => counts.DictionaryFixes++);
 
-        // Models often split an unfamiliar word in two ("beta bit" for Betabit); allow a break anywhere inside.
+        // Models often split an unfamiliar word in two ("lu mora" for Lumora); allow a break anywhere inside.
         var letters = entry.Term.Where(char.IsLetterOrDigit).ToArray();
         if (letters.Length >= 4 && letters.Length == entry.Term.Length)
             text = Replace(text, $@"(?<![\w]){string.Join(@"[\s\-]?", letters.Select(c => Regex.Escape(c.ToString())))}(?![\w])",

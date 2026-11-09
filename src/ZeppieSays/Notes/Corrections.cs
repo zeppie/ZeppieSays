@@ -61,7 +61,7 @@ public static partial class WordDiff
     static List<string> Words(string text) => Word().Matches(text).Select(m => m.Value).ToList();
 
     /// <summary>
-    /// Runs of words that were replaced ("beta bid" became "Betabit") or added ("Aurora"), at most three words each.
+    /// Runs of words that were replaced ("loo mora" became "Lumora") or added ("Aurora"), at most three words each.
     /// Case-only changes count: "aurora" became "Aurora".
     /// </summary>
     public static IReadOnlyList<WordChange> Changes(string before, string after)

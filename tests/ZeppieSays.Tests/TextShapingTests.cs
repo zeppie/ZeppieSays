@@ -43,10 +43,10 @@ public class TextShapingTests
     {
         var settings = new AppSettings
         {
-            Dictionary = [new DictionaryEntry { Term = "Betabit", SoundsLike = ["beta bid"] }],
+            Dictionary = [new DictionaryEntry { Term = "Lumora", SoundsLike = ["loo mora"] }],
         };
-        Assert.Equal("I work at Betabit.", TextShaping.Clean("I work at beta bit.", settings, Context()));
-        Assert.Equal("I work at Betabit.", TextShaping.Clean("I work at Beta-bid.", settings, Context()));
+        Assert.Equal("I work at Lumora.", TextShaping.Clean("I work at lu mora.", settings, Context()));
+        Assert.Equal("I work at Lumora.", TextShaping.Clean("I work at Loo-mora.", settings, Context()));
     }
 
     [Fact]
@@ -110,9 +110,9 @@ public class TextShapingTests
     [Fact]
     public void Prompt_lists_dictionary_and_identifiers_but_not_surrounding_text()
     {
-        var dictionary = new[] { new DictionaryEntry { Term = "Betabit" } };
+        var dictionary = new[] { new DictionaryEntry { Term = "Lumora" } };
         var prompt = TextShaping.BuildPrompt(dictionary, Context(before: "Dear Anna,", code: true, identifiers: ["userId"]));
-        Assert.Equal("Betabit, userId.", prompt);
+        Assert.Equal("Lumora, userId.", prompt);
     }
 
     [Fact]
@@ -122,10 +122,10 @@ public class TextShapingTests
     [Fact]
     public void Key_terms_skip_what_ElevenLabs_refuses_and_put_the_dictionary_first()
     {
-        var dictionary = new[] { "Betabit", "betabit", "List<string>", "one two three four five six", new string('x', 50), "Zeppie  Says" }
+        var dictionary = new[] { "Lumora", "lumora", "List<string>", "one two three four five six", new string('x', 50), "Zeppie  Says" }
             .Select(t => new DictionaryEntry { Term = t });
-        var terms = TextShaping.KeyTerms(dictionary, Context(code: true, identifiers: ["userId", "Betabit"]));
-        Assert.Equal(["Betabit", "Zeppie Says", "userId"], terms);
+        var terms = TextShaping.KeyTerms(dictionary, Context(code: true, identifiers: ["userId", "Lumora"]));
+        Assert.Equal(["Lumora", "Zeppie Says", "userId"], terms);
     }
 
     [Fact]

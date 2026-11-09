@@ -31,8 +31,8 @@ Press a key anywhere, talk, and the text lands where your cursor is.
   dates and repeats wrong. Sign in under Settings, Microsoft To Do, with your own app registration (the steps are there).
 - **A small pill** at the bottom of the screen shows the key, the waveform and the model while you talk.
   The finished text is inserted in one go when you stop.
-- **Dictionary.** Words you use a lot get the right spelling. `Betabit` alone works, and
-  `Betabit = beta bit, beta bid` also fixes spellings the model keeps getting wrong. Words live in plain text
+- **Dictionary.** Words you use a lot get the right spelling. `Lumora` alone works, and
+  `Lumora = lu mora, loo mora` also fixes spellings the model keeps getting wrong. Words live in plain text
   files, one per line: `ZeppieSaysDictionary.txt` in the settings folder, plus any others you add (say, a team
   list in a shared folder). Click a file on the Dictionary page to edit its words there; edits made elsewhere
   are picked up as soon as the file is saved.
@@ -138,7 +138,7 @@ Probe examples:
 
 ```bash
 dotnet run --project tools/ZeppieSays.Probe -- install whisper-large-v3-turbo
-dotnet run --project tools/ZeppieSays.Probe -- run whisper-large-v3-turbo nl "Ik werk bij Betabit aan ZeppieSays." "Betabit;ZeppieSays"
-dotnet run --project tools/ZeppieSays.Probe -- run elevenlabs-scribe-v2 nl "Ik werk bij Betabit aan ZeppieSays." "Betabit;ZeppieSays"
+dotnet run --project tools/ZeppieSays.Probe -- run whisper-large-v3-turbo nl "Ik werk bij Lumora aan ZeppieSays." "Lumora;ZeppieSays"
+dotnet run --project tools/ZeppieSays.Probe -- run elevenlabs-scribe-v2 nl "Ik werk bij Lumora aan ZeppieSays." "Lumora;ZeppieSays"
 dotnet run --project tools/ZeppieSays.Probe -- diarize meeting.m4a 0.4 0.5 n2
 ```
