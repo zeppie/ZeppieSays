@@ -58,6 +58,7 @@ public sealed class MainViewModel : ObservableObject
     public LoadedModelsViewModel Loaded { get; }
     public NotetakerViewModel Notetaker { get; }
     public TodoViewModel Todo { get; }
+    public Services.Updater? Updates { get; init; }
     /// <summary>The dictation keys, in the order of <see cref="AppSettings.Keys"/>.</summary>
     public ObservableCollection<BindingViewModel> Keys { get; } = [];
     public ObservableCollection<Choice> InstalledModels { get; } = [];

@@ -97,6 +97,30 @@ ZeppieSays lives in the system tray. Closing the window keeps it running; use th
 
 Settings, models and logs are stored in `%LOCALAPPDATA%\ZeppieSays`.
 
+## Installer and updates
+
+`tools/release.ps1` builds `Zeppie.ZeppieSays-win-Setup.exe` with [Velopack](https://velopack.io). The setup
+installs per user without admin rights into `%LOCALAPPDATA%\Zeppie.ZeppieSays`, adds Start menu and desktop
+shortcuts, and installs the .NET 10 Desktop Runtime when it's missing. Settings, models and logs stay in
+`%LOCALAPPDATA%\ZeppieSays`, so uninstalling or updating never touches them.
+
+```powershell
+.\tools\release.ps1 0.2.0            # build only, into artifacts\releases
+.\tools\release.ps1 0.2.0 -Publish   # build and upload as GitHub release v0.2.0
+```
+
+Every release needs a higher version than the previous one. With `-Publish` the release goes to
+github.com/zeppie/ZeppieSays/releases, together with a small delta package against the previous release.
+Installed copies check those releases 30 seconds after starting and every 6 hours, download a new version in
+the background, and install it when ZeppieSays quits (or right away with **Restart to update** in Settings or
+the tray menu). Running a newer Setup.exe over an existing install also updates it. Updates without a token
+only work while the repository is public; `gh auth login` is needed to publish.
+
+To try an update before publishing it, build it without `-Publish` and start the installed app with
+`ZEPPIESAYS_UPDATES` set to the `artifacts\releases` folder: it then updates from there instead of GitHub.
+
+The installer is not code-signed, so Windows SmartScreen warns on first run ("More info" → "Run anyway").
+
 ## Project layout
 
 | Path | What's there |

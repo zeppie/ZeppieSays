@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using Velopack;
 using ZeppieSays.Core;
 using ZeppieSays.Engines;
 using ZeppieSays.Llm;
@@ -27,7 +28,21 @@ public partial class App : Application
     OverlayWindow? _overlay;
     ModelManager _models = null!;
 
+    Updater? _updater;
+
     public bool IsQuitting { get; private set; }
+
+    [STAThread]
+    static void Main()
+    {
+        // Velopack runs its install, update and uninstall hooks here and exits when it was started for one of them.
+        VelopackApp.Build()
+            .OnBeforeUninstallFastCallback(_ => Autostart.Apply(false))
+            .Run();
+        var app = new App();
+        app.InitializeComponent();
+        app.Run();
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -79,8 +94,12 @@ public partial class App : Application
         _meetings = new MeetingController(_settings, Dispatcher);
         var todo = new TodoClient(_settings);
 
+        _updater = new Updater(Quit);
+        // The installed app moves to a new folder when installed or updated; point "Start with Windows" at this copy.
+        if (_updater.IsInstalled && _settings.StartWithWindows) Autostart.Apply(true);
+
         var model = new MainViewModel(_settings, _models, _engines, _hook, rewriter, usage, _notetaker, summarizer, voices, _meetings,
-            _dictionaryFiles, history, todo);
+            _dictionaryFiles, history, todo) { Updates = _updater };
         model.Notetaker.Start();
         _window = new MainWindow(model);
         _overlay = new OverlayWindow();
@@ -104,6 +123,9 @@ public partial class App : Application
         };
 
         CreateTray(model);
+        _updater.Ready += version => _tray?.ShowBalloonTip(5000, "ZeppieSays update ready",
+            $"Version {version} is installed the next time ZeppieSays quits. Or restart it now from the tray menu.", Forms.ToolTipIcon.Info);
+        _updater.Start();
 
         var background = e.Args.Contains("--background");
         if (!background || model.HasNoModels)
@@ -131,8 +153,10 @@ public partial class App : Application
                     Checked = profile == main.ActiveProfile,
                 });
         };
+        var update = menu.Items.Add("Restart to update", null, (_, _) => _updater?.RestartToUpdate.Execute(null));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => Quit());
+        menu.Opening += (_, _) => update.Visible = _updater?.IsUpdateReady == true;
 
         var iconStream = GetResourceStream(new Uri("pack://application:,,,/Assets/zeppie.ico"))!.Stream;
         _tray = new Forms.NotifyIcon
@@ -183,6 +207,7 @@ public partial class App : Application
         _dictionaryFiles?.Dispose();
         if (_ownsSingleInstance) _singleInstance?.ReleaseMutex();
         _singleInstance?.Dispose();
+        _updater?.ApplyOnExit(); // last: the updater waits for this process to end
         Log.Info("ZeppieSays stopped");
         base.OnExit(e);
     }

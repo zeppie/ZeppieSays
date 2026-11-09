@@ -2162,6 +2162,30 @@
                                 </TextBlock>
                             </StackPanel>
                         </Border>
+                        <!-- Updates -->
+                        <Border Style="{StaticResource Card}" DataContext="{Binding Updates}">
+                            <StackPanel>
+                                <TextBlock Text="Updates" Style="{StaticResource SectionTitle}" />
+                                <TextBlock>
+                                    <Run Text="Version" /> <Run Text="{Binding Version, Mode=OneWay}" />
+                                </TextBlock>
+                                <TextBlock Text="{Binding Status}" Style="{StaticResource Caption}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Content="Check now" Command="{Binding CheckNow}" IsEnabled="{Binding CanCheck}" Margin="0,0,8,0" />
+                                    <Button Content="Restart to update" Command="{Binding RestartToUpdate}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsUpdateReady}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
                         <TextBlock Margin="4,0,4,12" Style="{StaticResource Caption}">
                             <Hyperlink Command="{Binding OpenDataFolder}">Open models and logs folder</Hyperlink>
                         </TextBlock>
