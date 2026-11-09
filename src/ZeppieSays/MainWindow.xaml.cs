@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     public MainWindow(MainViewModel model)
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => Services.TaskbarIdentity.Apply(this);
         DataContext = model;
         if (model.HasNoModels) Tabs.SelectedItem = ModelsTab;
         Tabs.SelectionChanged += (_, e) =>
