@@ -81,11 +81,12 @@
         <Style x:Key="Chip" TargetType="RadioButton">
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Padding" Value="14,6" />
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Bd" CornerRadius="16" Padding="14,6" BorderThickness="1" Background="Transparent"
+                        <Border x:Name="Bd" CornerRadius="16" Padding="{TemplateBinding Padding}" BorderThickness="1" Background="Transparent"
                                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -167,11 +168,11 @@
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="8" Height="8" Fill="{Binding Brush}" Margin="0,0,6,0" VerticalAlignment="Center"
                                      Visibility="{Binding HasSpeaker, Converter={StaticResource Visible}}" />
-                            <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="12" Margin="0,0,8,0"
+                            <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="11" Margin="0,0,8,0"
                                        Visibility="{Binding HasSpeaker, Converter={StaticResource Visible}}" />
-                            <TextBlock Text="{Binding Stamp}" Style="{StaticResource Caption}" FontFamily="Consolas" />
+                            <TextBlock Text="{Binding Stamp}" Style="{StaticResource Caption}" FontSize="10" FontFamily="Consolas" />
                         </StackPanel>
-                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,2,28,0" />
+                        <TextBlock Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" Margin="0,2,28,0" />
                     </StackPanel>
                 </Button>
                 <Button x:Name="Pencil" Content="&#xE70F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Padding="7,5"
@@ -209,7 +210,7 @@
                                     CommandParameter="{Binding}" ToolTip="Use the time of the player" AutomationProperties.Name="Use the time of the player" />
                         </StackPanel>
                     </Grid>
-                    <TextBox x:Name="EditBox" Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap"
+                    <TextBox x:Name="EditBox" Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" FontSize="12"
                              MinHeight="64" Loaded="EditBox_Loaded" PreviewKeyDown="EditBox_KeyDown" />
                     <WrapPanel Margin="0,10,0,0">
                         <Button Content="Save" Style="{DynamicResource AccentButtonStyle}" Padding="14,5" Margin="0,0,6,6"
@@ -700,92 +701,132 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Notetaker: the recordings along the top; below, the selected one with its player, speakers and transcript -->
+            <!-- Notetaker: the recordings in a list on the left; beside it, the selected one with its player, speakers and transcript -->
             <TabItem Header="Notetaker" Tag="&#xE7C8;" x:Name="NotetakerTab">
                 <Grid DataContext="{Binding Notetaker}" AllowDrop="True" Drop="Notetaker_Drop" DragOver="Notetaker_DragOver"
                       Background="Transparent" Margin="0,4,18,16">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="NoteListColumn" Width="165" MinWidth="120" MaxWidth="420" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="400" />
+                    </Grid.ColumnDefinitions>
 
-                    <!-- Record and add files as two small round buttons, then every recording, newest first. No scrollbar:
-                         drag the cards, use the arrows, and the thin line shows where you are among them. -->
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Button Style="{StaticResource RoundButton}" Width="48" Height="48" VerticalAlignment="Top" Margin="0,8,0,0"
-                                Command="{Binding ToggleRecording}" ToolTip="{Binding RecordLabel}"
-                                AutomationProperties.Name="{Binding RecordLabel}">
-                            <Grid>
-                                <Ellipse Width="18" Height="18" Fill="#E5484D">
-                                    <Ellipse.Style>
-                                        <Style TargetType="Ellipse">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Meetings.IsRecording}" Value="True">
+                    <!-- The recordings from top to bottom under a heading per day, newest first, with Record and Add files above
+                         them: they make the recordings, so they sit where the recordings are. The splitter makes the list wider or
+                         narrower; collapsed it is a rail with just the buttons. -->
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,2,0,6">
+                            <TextBlock Text="Conversations" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="4,0,0,0"
+                                       Visibility="{Binding ListExpanded, Converter={StaticResource Visible}}" />
+                            <Button Command="{Binding ToggleList}" HorizontalAlignment="Right" Padding="8,5"
+                                    Background="Transparent" BorderThickness="0"
+                                    FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"
+                                    AutomationProperties.Name="Collapse or expand the list of conversations">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                        <Setter Property="Content" Value="&#xE76B;" />
+                                        <Setter Property="ToolTip" Value="Collapse the list" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ListCollapsed}" Value="True">
+                                                <Setter Property="Content" Value="&#xE76C;" />
+                                                <Setter Property="ToolTip" Value="Show the list of conversations" />
+                                                <Setter Property="HorizontalAlignment" Value="Center" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </Grid>
+                        <StackPanel Grid.Row="1" Margin="0,0,10,10">
+                            <Button Command="{Binding ToggleRecording}" ToolTip="{Binding RecordLabel}" Height="28"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="4,0"
+                                    AutomationProperties.Name="{Binding RecordLabel}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Grid Width="18" Height="18" VerticalAlignment="Center">
+                                        <Ellipse Width="13" Height="13" Fill="#E5484D">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Meetings.IsRecording}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                        <Rectangle Width="11" Height="11" RadiusX="2" RadiusY="2" Fill="#E5484D">
+                                            <Rectangle.Style>
+                                                <Style TargetType="Rectangle">
                                                     <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Ellipse.Style>
-                                </Ellipse>
-                                <Rectangle Width="16" Height="16" RadiusX="3" RadiusY="3" Fill="#E5484D">
-                                    <Rectangle.Style>
-                                        <Style TargetType="Rectangle">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Meetings.IsRecording}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Rectangle.Style>
-                                </Rectangle>
-                            </Grid>
-                        </Button>
-                        <Button Grid.Column="1" Style="{StaticResource RoundButton}" Width="48" Height="48" VerticalAlignment="Top"
-                                Margin="8,8,0,0" Command="{Binding BrowseFiles}"
-                                ToolTip="Add audio or video files (or drop them anywhere on this page)"
-                                AutomationProperties.Name="Add audio or video files">
-                            <TextBlock Text="&#xE898;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"
-                                       Foreground="{StaticResource Accent}" />
-                        </Button>
-                        <Button x:Name="StripLeft" Grid.Column="2" Style="{StaticResource RoundButton}" Width="32" Height="32"
-                                VerticalAlignment="Top" Margin="14,16,0,0" Visibility="Collapsed" IsEnabled="False" Click="StripLeft_Click"
-                                ToolTip="Earlier recordings" AutomationProperties.Name="Scroll left">
-                            <TextBlock Text="&#xE76B;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" />
-                        </Button>
-                        <Grid Grid.Column="3" Margin="8,0,8,0">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                        <ListBox x:Name="JobStrip" ItemsSource="{Binding Jobs}" SelectedItem="{Binding Selected}"
-                                 BorderThickness="0" Background="Transparent"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Hidden" ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 ScrollViewer.CanContentScroll="False" SizeChanged="JobStrip_SizeChanged"
-                                 PreviewMouseWheel="JobStrip_PreviewMouseWheel" PreviewMouseLeftButtonDown="JobStrip_PreviewMouseDown"
-                                 PreviewMouseMove="JobStrip_PreviewMouseMove" PreviewMouseLeftButtonUp="JobStrip_PreviewMouseUp"
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Meetings.IsRecording}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Rectangle.Style>
+                                        </Rectangle>
+                                    </Grid>
+                                    <TextBlock Text="{Binding RecordLabel}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                                               Visibility="{Binding ListExpanded, Converter={StaticResource Visible}}" />
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding BrowseFiles}" Height="26" Margin="0,4,0,0" HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center" Padding="4,0"
+                                    ToolTip="Add audio or video files (or drop them anywhere on this page)"
+                                    AutomationProperties.Name="Add audio or video files">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE898;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14"
+                                               Foreground="{StaticResource Accent}" VerticalAlignment="Center" />
+                                    <TextBlock Text="Add files" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                                               Visibility="{Binding ListExpanded, Converter={StaticResource Visible}}" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                        <!-- Find a conversation: by its title, who was in it, or what was said -->
+                        <Grid Grid.Row="2" Margin="0,0,10,8" Visibility="{Binding ListExpanded, Converter={StaticResource Visible}}">
+                            <TextBox Text="{Binding JobSearch, UpdateSourceTrigger=PropertyChanged}" Padding="8,3,28,3" FontSize="11"
+                                     ToolTip="Find a conversation by its name, the people in it, or what was said" />
+                            <TextBlock Text="Search conversations" Style="{StaticResource Caption}" TextWrapping="NoWrap" Margin="10,0,0,0"
+                                       VerticalAlignment="Center" HorizontalAlignment="Left" IsHitTestVisible="False"
+                                       Visibility="{Binding JobSearch, Converter={StaticResource EmptyToVisible}}" />
+                            <Button Content="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Padding="6,4"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,3,0"
+                                    Background="Transparent" BorderThickness="0" Command="{Binding ClearJobSearch}"
+                                    ToolTip="Clear the search" AutomationProperties.Name="Clear the search"
+                                    Visibility="{Binding HasJobSearch, Converter={StaticResource Visible}}" />
+                        </Grid>
+                        <ListBox x:Name="JobStrip" Grid.Row="3" ItemsSource="{Binding JobsView}" SelectedItem="{Binding Selected}"
+                                 BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 Visibility="{Binding ListExpanded, Converter={StaticResource Visible}}"
                                  KeyDown="JobStrip_KeyDown">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <VirtualizingStackPanel Orientation="Horizontal" />
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <!-- Cards like the sidebar: rounded, a soft fill when selected -->
+                            <ListBox.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" Style="{StaticResource Caption}" FontSize="10"
+                                                       Margin="6,8,0,3" />
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ListBox.GroupStyle>
+                            <!-- Quiet rows: a soft fill when selected, a hairline only on hover -->
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem">
                                     <Setter Property="Cursor" Value="Hand" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="ListBoxItem">
-                                                <Border x:Name="Bd" CornerRadius="12" Padding="10,8" Margin="0,0,8,0" BorderThickness="1"
-                                                        Width="236" Background="Transparent" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                                <Border x:Name="Bd" CornerRadius="8" Padding="8,5" Margin="0,0,10,1" BorderThickness="1"
+                                                        Background="Transparent" BorderBrush="Transparent">
                                                     <ContentPresenter />
                                                 </Border>
                                                 <ControlTemplate.Triggers>
@@ -794,7 +835,6 @@
                                                     </Trigger>
                                                     <Trigger Property="IsSelected" Value="True">
                                                         <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
-                                                        <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}" />
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -806,7 +846,6 @@
                                 <DataTemplate DataType="{x:Type notes:NoteJob}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
@@ -816,34 +855,30 @@
                                                           IsEnabled="{Binding IsDone}" />
                                             </ContextMenu>
                                         </Grid.ContextMenu>
-                                        <Border Width="36" Height="36" CornerRadius="10" Background="{StaticResource AccentSoft}" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Accent}" />
-                                        </Border>
-                                        <!-- The name on up to two lines, then when and how far -->
-                                        <StackPanel Grid.Column="1" Margin="10,0,6,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                                                       LineStackingStrategy="BlockLineHeight" LineHeight="18" MaxHeight="36" ToolTip="{Binding Name}" />
-                                            <TextBlock Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"
+                                        <!-- The name on up to two lines, then the time and how far -->
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}" FontSize="10.5" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                                       LineStackingStrategy="BlockLineHeight" LineHeight="14" MaxHeight="28" ToolTip="{Binding Name}" />
+                                            <TextBlock Style="{StaticResource Caption}" FontSize="9.5" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"
                                                        TextWrapping="NoWrap" ToolTip="{Binding StatusText}">
                                                 <TextBlock.Text>
                                                     <MultiBinding StringFormat="{}{0} · {1}">
-                                                        <Binding Path="Date" />
+                                                        <Binding Path="Time" />
                                                         <Binding Path="StatusText" />
                                                     </MultiBinding>
                                                 </TextBlock.Text>
                                             </TextBlock>
-                                            <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="0,5,0,0"
+                                            <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="3" Margin="0,5,0,0"
                                                          Foreground="{StaticResource Accent}"
                                                          IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
                                                          Visibility="{Binding IsWorking, Converter={StaticResource Visible}}" />
                                         </StackPanel>
-                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0"
                                                     Visibility="{Binding IsFailed, Converter={StaticResource Visible}}">
-                                            <Button Content="Retry" Padding="10,3"
+                                            <Button Content="Retry" Padding="8,2" FontSize="12"
                                                     Command="{Binding DataContext.Retry, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                                     CommandParameter="{Binding}" />
-                                            <Button Content="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="7,4" Margin="4,0,0,0"
+                                            <Button Content="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="6,3" Margin="4,0,0,0"
                                                     Command="{Binding DataContext.RecycleJob, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                                     CommandParameter="{Binding}" ToolTip="Move to the Recycle Bin"
                                                     AutomationProperties.Name="Move to the Recycle Bin" />
@@ -852,21 +887,12 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                            <!-- Where you are among the recordings -->
-                            <Border x:Name="StripTrack" Grid.Row="1" Height="3" CornerRadius="1.5" Margin="0,5,0,0" IsHitTestVisible="False"
-                                    Visibility="Collapsed" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                <Border x:Name="StripThumb" HorizontalAlignment="Left" Width="40" CornerRadius="1.5"
-                                        Background="{StaticResource Accent}" />
-                            </Border>
-                        </Grid>
-                        <Button x:Name="StripRight" Grid.Column="4" Style="{StaticResource RoundButton}" Width="32" Height="32"
-                                VerticalAlignment="Top" Margin="0,16,0,0" Visibility="Collapsed" Click="StripRight_Click"
-                                ToolTip="Older recordings" AutomationProperties.Name="Scroll right">
-                            <TextBlock Text="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" />
-                        </Button>
                     </Grid>
+                    <GridSplitter Grid.Column="1" Width="12" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                                  Background="Transparent" ResizeBehavior="PreviousAndNext" ShowsPreview="False"
+                                  Visibility="{Binding ListExpanded, Converter={StaticResource Visible}}" />
 
-                    <Grid Grid.Row="1">
+                    <Grid Grid.Column="2">
                         <!-- Nothing picked yet, or still being transcribed -->
                         <Border Style="{StaticResource Card}" Margin="0" Visibility="{Binding ShowPlaceholder, Converter={StaticResource Visible}}">
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420">
@@ -967,13 +993,6 @@
                                                   IsEnabled="{Binding Selected.Options.LabelSpeakers}" VerticalAlignment="Center"
                                                   ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
                                     </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding Selected.Options.CanPickSpeakerSource, Converter={StaticResource Visible}}"
-                                                IsEnabled="{Binding Selected.Options.LabelSpeakers}">
-                                        <TextBlock Text="Speakers found by" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                        <ComboBox ItemsSource="{x:Static notes:SpeakerSources.All}" DisplayMemberPath="Label"
-                                                  SelectedValuePath="Value" SelectedValue="{Binding Selected.Options.SpeakerSourceChoice}" MinWidth="170"
-                                                  ToolTip="ElevenLabs transcribes and tells the speakers apart in one go. Named people are still recognised when the speaker models are on this PC." />
-                                    </StackPanel>
                                     <Expander Header="Speaker detection (advanced)" Margin="0,10,0,0" IsEnabled="{Binding Selected.Options.LabelSpeakers}"
                                               IsExpanded="{Binding Selected.IsRedo, Mode=OneWay}">
                                         <StackPanel Margin="0,10,0,4">
@@ -983,7 +1002,7 @@
                                                       HorizontalAlignment="Left" MinWidth="260" Margin="0,0,0,14"
                                                       ToolTip="Tells the voices in this file apart. People you named are learned for this model first, from earlier recordings, when it doesn't know them yet." />
                                             <ContentControl Content="{Binding SelectedSpeakerDetection}" ContentTemplate="{StaticResource SpeakerDetectionPanel}"
-                                                            Focusable="False" />
+                                                            Focusable="False" IsEnabled="{Binding Selected.Options.UsesLocalVoiceModel}" />
                                         </StackPanel>
                                     </Expander>
                                     <CheckBox Content="Summary and action items" IsChecked="{Binding Selected.Options.Summarize}" Margin="0,10,0,0"
@@ -1038,7 +1057,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="16" />
-                                <ColumnDefinition Width="0.62*" MinWidth="340" />
+                                <ColumnDefinition Width="0.5*" MinWidth="300" />
                             </Grid.ColumnDefinitions>
 
                             <Grid>
@@ -1161,10 +1180,13 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Orientation="Horizontal">
-                                            <RadioButton Content="Transcript" GroupName="NoteTab" IsChecked="{Binding ShowTranscript}" Style="{StaticResource Chip}" />
-                                            <RadioButton Content="Summary" GroupName="NoteTab" IsChecked="{Binding ShowSummary}" IsEnabled="{Binding CanOpenSummary}"
+                                            <RadioButton Content="&#xE8F2;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Padding="11,6"
+                                                         GroupName="NoteTab" IsChecked="{Binding ShowTranscript}" Style="{StaticResource Chip}"
+                                                         ToolTip="Transcript" AutomationProperties.Name="Transcript" />
+                                            <RadioButton Content="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Padding="11,6"
+                                                         GroupName="NoteTab" IsChecked="{Binding ShowSummary}" IsEnabled="{Binding CanOpenSummary}"
                                                          Style="{StaticResource Chip}"
-                                                         ToolTip="Summary, decisions and action items" />
+                                                         ToolTip="Samenvatting, besluiten en actiepunten" AutomationProperties.Name="Samenvatting" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                                             <Button Content="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Padding="9,6" Margin="8,0,0,0"
@@ -1959,13 +1981,6 @@
                                                   SelectedValuePath="Value" SelectedValue="{Binding Speakers}" MinWidth="104" Margin="0,0,20,4"
                                                   IsEnabled="{Binding LabelSpeakers}" VerticalAlignment="Center"
                                                   ToolTip="If you know how many people speak, pick it: speaker labels get much more reliable" />
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,20,4" IsEnabled="{Binding LabelSpeakers}"
-                                                    Visibility="{Binding CanPickSpeakerSource, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="found by" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                            <ComboBox ItemsSource="{x:Static notes:SpeakerSources.All}" DisplayMemberPath="Label"
-                                                      SelectedValuePath="Value" SelectedValue="{Binding SpeakerSourceChoice}" MinWidth="150"
-                                                      ToolTip="With ElevenLabs as the model, ElevenLabs can tell the speakers apart instead of the models on this PC" />
-                                        </StackPanel>
                                         <CheckBox Content="Summary and action items" IsChecked="{Binding Summarize}" Margin="0,0,20,4"
                                                   ToolTip="Written by your default style model (Styles page)" />
                                         <CheckBox Content="Dictionary hints" IsChecked="{Binding UseDictionary}" Margin="0,0,0,4"
@@ -1983,7 +1998,7 @@
                                                Text="Tells voices apart and recognises the people you named. After a switch, named voices are learned again from transcripts that still have their audio; the first file with a new model downloads it (about 30 MB)." />
                                     <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,10" TextWrapping="Wrap"
                                                Text="Every new file starts with these settings; change them per file before it starts, or afterwards with “Find the speakers again” above a transcript." />
-                                    <ContentControl Content="{Binding SpeakerDetection}" ContentTemplate="{StaticResource SpeakerDetectionPanel}" Focusable="False" />
+                                    <ContentControl Content="{Binding SpeakerDetection}" ContentTemplate="{StaticResource SpeakerDetectionPanel}" Focusable="False" IsEnabled="{Binding UsesLocalVoiceModel}" />
                                 </StackPanel>
                             </Expander>
                             </StackPanel>

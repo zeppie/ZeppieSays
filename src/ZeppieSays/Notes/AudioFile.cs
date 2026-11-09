@@ -33,8 +33,11 @@ public static class AudioFile
 
     /// <summary>
     /// Where someone speaks in <paramref name="samples"/>, as sample ranges. With <paramref name="other"/> (the call
-    /// track next to a microphone track), moments where the other track is clearly louder count as echo of the
-    /// speakers picked up by the microphone, not as speech.
+    /// track next to a microphone track), moments where the microphone is no louder than the call track count as echo
+    /// of the speakers picked up by the microphone, not as speech: what comes out of the speakers is never the user.
+    /// The call is judged over a few frames around each moment, as the echo arrives a little late and rings on, and
+    /// how much the microphone picks up of it is measured on the recording itself (headphones: next to nothing; open
+    /// speakers: a third of it or more), so the cut-off follows.
     /// </summary>
     public static IReadOnlyList<(int Start, int End)> SpeechRegions(float[] samples, float[]? other = null)
     {
@@ -51,9 +54,10 @@ public static class AudioFile
         // Speech is well above the background noise of this track.
         var floor = rms.Order().ElementAt(frames / 10);
         var threshold = Math.Max(0.006f, floor * 3);
+        var (callLevel, echoBelow) = other is null ? ([], 0f) : EchoLevels(rms, otherRms);
         var speech = new bool[frames];
         for (var f = 0; f < frames; f++)
-            speech[f] = rms[f] > threshold && !(other is not null && otherRms[f] > 0.005f && rms[f] < otherRms[f] * 0.6f);
+            speech[f] = rms[f] > threshold && !(other is not null && callLevel[f] > 0.005f && rms[f] < callLevel[f] * echoBelow);
 
         // Bridge short pauses, drop blips, and pad a little so first and last syllables aren't cut.
         var regions = new List<(int, int)>();
@@ -76,6 +80,28 @@ public static class AudioFile
             }
         }
         return regions;
+    }
+
+    /// <summary>
+    /// The call's loudness around each frame (the loudest of 150 ms either side), and how loud the microphone may be
+    /// next to it and still be echo: the median share of the call that reaches the microphone while the call is
+    /// loud (mostly the call alone), times 2.5, kept between 0.6 and 1.5.
+    /// </summary>
+    static (float[] CallLevel, float EchoBelow) EchoLevels(float[] mic, float[] call)
+    {
+        const int Spread = 5;
+        var level = new float[call.Length];
+        for (var f = 0; f < call.Length; f++)
+        {
+            var max = 0f;
+            for (var g = Math.Max(0, f - Spread); g <= Math.Min(call.Length - 1, f + Spread); g++) max = Math.Max(max, call[g]);
+            level[f] = max;
+        }
+        var shares = new List<float>();
+        for (var f = 0; f < call.Length; f++)
+            if (call[f] > 0.02f) shares.Add(mic[f] / call[f]);
+        var coupling = shares.Count >= 50 ? shares.Order().ElementAt(shares.Count / 2) : 0f;
+        return (level, Math.Clamp(coupling * 2.5f, 0.6f, 1.5f));
     }
 
     static float Rms(float[] samples, int start, int count)

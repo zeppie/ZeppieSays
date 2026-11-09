@@ -3,18 +3,6 @@ using ZeppieSays.UI;
 
 namespace ZeppieSays.Notes;
 
-/// <summary>Who tells the speakers apart when the speech model is ElevenLabs.</summary>
-public static class SpeakerSources
-{
-    public const string Local = "local";
-    public const string Cloud = "cloud";
-
-    public static IReadOnlyList<Choice> All { get; } =
-        [new(Local, "On this PC"), new(Cloud, "ElevenLabs (cloud)")];
-
-    public static bool IsElevenLabs(string modelId) => ModelCatalog.Cloud.Any(m => m.Id == modelId);
-}
-
 /// <summary>
 /// How one file is transcribed. Starts as a copy of the general Notetaker settings, so a dropped file can be
 /// adjusted on its own without touching them.
@@ -25,7 +13,6 @@ public sealed class NoteOptions : ObservableObject
     string _language = "auto";
     bool _labelSpeakers;
     int _speakerCount;
-    bool _cloudSpeakers;
     bool _summarize;
     bool _useDictionary;
     string _title = "";
@@ -37,7 +24,6 @@ public sealed class NoteOptions : ObservableObject
         _language = settings.Language,
         _labelSpeakers = settings.LabelSpeakers,
         _speakerCount = settings.Speakers,
-        _cloudSpeakers = settings.CloudSpeakers,
         _summarize = settings.Summarize,
         _useDictionary = settings.UseDictionary,
         Speaker = settings.SpeakerDetection.Copy(),
@@ -55,8 +41,14 @@ public sealed class NoteOptions : ObservableObject
     public string VoiceModel
     {
         get => _voiceModel;
-        set { if (value is not null) Set(ref _voiceModel, value); }
+        set
+        {
+            if (value is not null && Set(ref _voiceModel, value)) Raise(nameof(UsesLocalVoiceModel));
+        }
     }
+
+    /// <summary>The voice model runs on this PC, so the advanced speaker settings apply (ElevenLabs has none).</summary>
+    public bool UsesLocalVoiceModel => !Notes.VoiceModel.Get(_voiceModel).IsCloud;
 
     /// <summary>
     /// Doing a finished transcript again: true only works out the speakers again and hands them the words already
@@ -65,12 +57,7 @@ public sealed class NoteOptions : ObservableObject
     public bool KeepText
     {
         get => _keepText;
-        set
-        {
-            if (!Set(ref _keepText, value && _canKeepText)) return;
-            Raise(nameof(TranscribeAgain));
-            Raise(nameof(CanPickSpeakerSource));
-        }
+        set { if (Set(ref _keepText, value && _canKeepText)) Raise(nameof(TranscribeAgain)); }
     }
 
     public bool TranscribeAgain
@@ -93,25 +80,8 @@ public sealed class NoteOptions : ObservableObject
     public string ModelId
     {
         get => _modelId;
-        set
-        {
-            // the picker briefly clears while its list refreshes
-            if (value is not null && Set(ref _modelId, value)) Raise(nameof(CanPickSpeakerSource));
-        }
+        set { if (value is not null) Set(ref _modelId, value); } // the picker briefly clears while its list refreshes
     }
-
-    /// <summary>ElevenLabs can tell the speakers apart, but only when it transcribes (not when only the speakers are found again).</summary>
-    public bool CanPickSpeakerSource => TranscribeAgain && SpeakerSources.IsElevenLabs(_modelId);
-
-    /// <summary>The "speakers found by" picker's value (<see cref="SpeakerSources"/>).</summary>
-    public string SpeakerSourceChoice
-    {
-        get => _cloudSpeakers ? SpeakerSources.Cloud : SpeakerSources.Local;
-        set { if (value is not null && Set(ref _cloudSpeakers, value == SpeakerSources.Cloud)) Raise(nameof(CloudSpeakers)); }
-    }
-
-    /// <summary>ElevenLabs finds the speakers; only counts when the speech model is ElevenLabs.</summary>
-    public bool CloudSpeakers => _cloudSpeakers && SpeakerSources.IsElevenLabs(_modelId);
 
     public string Language
     {

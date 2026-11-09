@@ -16,7 +16,7 @@ public sealed partial class NoteJob(string audioPath) : ObservableObject
     public string AudioPath
     {
         get => _audioPath;
-        set { if (Set(ref _audioPath, value)) { Raise(nameof(Name)); Raise(nameof(Title)); Raise(nameof(Date)); } }
+        set { if (Set(ref _audioPath, value)) { Raise(nameof(Name)); Raise(nameof(Title)); Raise(nameof(Date)); RaiseWhen(); } }
     }
     string _audioPath = audioPath;
 
@@ -64,8 +64,32 @@ public sealed partial class NoteJob(string audioPath) : ObservableObject
     public string? TranscriptPath { get => _transcriptPath; set => Set(ref _transcriptPath, value); }
     string? _transcriptPath;
 
-    public DateTime When { get => _when; set { if (Set(ref _when, value)) Raise(nameof(Date)); } }
+    public DateTime When { get => _when; set { if (Set(ref _when, value)) { Raise(nameof(Date)); RaiseWhen(); } } }
     DateTime _when = DateTime.Now;
+
+    void RaiseWhen()
+    {
+        Raise(nameof(SortDate));
+        Raise(nameof(Time));
+        Raise(nameof(DayGroup));
+    }
+
+    /// <summary>When the recording was made: the date in its name, else the file's time. What the list is ordered by.</summary>
+    public DateTime SortDate => SplitName(Name).Date ?? When;
+
+    /// <summary>"10:44", for under the day heading the list groups it by.</summary>
+    public string Time => SortDate.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture);
+
+    /// <summary>The list's heading for this recording's day: Today, Yesterday, the weekday for the days before, else the date.</summary>
+    public string DayGroup => DayHeading(SortDate.Date, DateTime.Today, System.Globalization.CultureInfo.CurrentCulture);
+
+    public static string DayHeading(DateTime day, DateTime today, System.Globalization.CultureInfo culture)
+    {
+        if (day >= today) return "Today";
+        if (day == today.AddDays(-1)) return "Yesterday";
+        if (day > today.AddDays(-7)) return culture.TextInfo.ToTitleCase(day.ToString("dddd", culture));
+        return day.ToString(day.Year == today.Year ? "d MMMM" : "d MMMM yyyy", culture);
+    }
 
     /// <summary>A finished transcript waiting to be done again with other (speaker) settings; see <see cref="Notetaker.Redo"/>.</summary>
     public bool IsRedo { get => _isRedo; set => Set(ref _isRedo, value); }
@@ -336,7 +360,10 @@ public sealed partial class Notetaker : IDisposable
                 Title = options.Title.Trim() is { Length: > 0 } title ? title : job.Name,
                 Duration = duration,
                 ModelName = heard?.SpeechModel ?? model!.Info.Name,
-                VoiceModel = VoiceModel.Get(options.VoiceModel).Id,
+                // ElevenLabs finds the speakers only while it also transcribes; otherwise the default local model does.
+                VoiceModel = VoiceModel.Get(options.VoiceModel) is { IsCloud: true } && model?.Info.Engine != EngineKind.ElevenLabs
+                    ? VoiceModel.DefaultId
+                    : VoiceModel.Get(options.VoiceModel).Id,
             };
             await LearnVoicesForAsync(transcript.VoiceModel, options, Report);
             var turns = recording is null
@@ -430,8 +457,8 @@ public sealed partial class Notetaker : IDisposable
     {
         if (options.LabelSpeakers)
         {
-            if (await CloudTurnsAsync(samples, options.SpeakerCount, options, model, transcript, report, ct) is { } cloud)
-                return cloud;
+            if (VoiceModel.Get(transcript.VoiceModel).IsCloud)
+                return await CloudTurnsAsync(samples, options.SpeakerCount, options, model!, report, ct) ?? [new Turn(samples, 0, samples.Length, null)];
             if (await FindSpeakersAsync(samples, options.SpeakerCount, options.Speaker, transcript.VoiceModel, report, ct) is { } speakers)
                 return await NameSpeakersAsync(samples, speakers, transcript, report, ct);
         }
@@ -439,48 +466,42 @@ public sealed partial class Notetaker : IDisposable
     }
 
     /// <summary>
-    /// ElevenLabs transcribes the whole track and tells the speakers apart in one go, when the user picked it for
-    /// the speakers too. The turns come with their words, so nothing is transcribed twice. Null (use the speaker
-    /// models on this PC) when it wasn't picked or it failed.
+    /// With the ElevenLabs voice model: ElevenLabs transcribes the whole track and tells the speakers apart in one
+    /// go. The turns come with their words, so nothing is transcribed twice, and are labelled "Speaker 1", "Speaker 2", …
+    /// in order of appearance (it names no one). Null when it heard no words. A failure is the job's failure: falling
+    /// back to the models on this PC would be a different choice than the one made, and a second paid request.
     /// </summary>
-    async Task<List<Turn>?> CloudTurnsAsync(float[] samples, int count, NoteOptions options, InstalledModel? model, Transcript transcript,
+    async Task<List<Turn>?> CloudTurnsAsync(float[] samples, int count, NoteOptions options, InstalledModel model,
         Action<string, double> report, CancellationToken ct)
     {
-        if (model is not { Info.Engine: EngineKind.ElevenLabs } || !options.CloudSpeakers) return null;
-        try
-        {
-            report("Transcribing and finding speakers (ElevenLabs)", -1);
-            var engine = await _engines.GetAsync(model.Info.Id);
-            while (_isDictating()) await Task.Delay(250, ct); // the keys go first
-            var keyTerms = options.UseDictionary ? TextShaping.KeyTerms(_settings.AllWords, ScreenContext.Empty) : null;
-            var language = model.Info.AutoLanguageOnly ? "auto" : options.Language;
-            var (_, words) = await engine.TranscribeWordsAsync(new(samples, language, "", keyTerms, DetectSpeakers: true, SpeakerCount: count), ct);
-            if (words.Count == 0) return null;
+        report("Transcribing and finding speakers (ElevenLabs)", -1);
+        var engine = await _engines.GetAsync(model.Info.Id);
+        while (_isDictating()) await Task.Delay(250, ct); // the keys go first
+        var keyTerms = options.UseDictionary ? TextShaping.KeyTerms(_settings.AllWords, ScreenContext.Empty) : null;
+        var language = model.Info.AutoLanguageOnly ? "auto" : options.Language;
+        var (_, words) = await engine.TranscribeWordsAsync(new(samples, language, "", keyTerms, DetectSpeakers: true, SpeakerCount: count), ct);
+        if (words.Count == 0) return null;
 
-            // One turn per stretch of one speaker; a long pause starts a new one, so a monologue is not one paragraph.
-            const double LongPause = 2;
-            var runs = new List<List<TimedWord>>();
-            int? current = null;
-            foreach (var word in words)
-            {
-                var speaker = word.Speaker ?? current ?? 0;
-                if (runs.Count == 0 || speaker != current || word.Start - runs[^1][^1].End > LongPause) runs.Add([]);
-                runs[^1].Add(word with { Speaker = speaker });
-                current = speaker;
-            }
-            var turns = runs.Select(r => new SpeakerTurn(
+        // One turn per stretch of one speaker; a long pause starts a new one, so a monologue is not one paragraph.
+        const double LongPause = 2;
+        var runs = new List<List<TimedWord>>();
+        int? current = null;
+        foreach (var word in words)
+        {
+            var speaker = word.Speaker ?? current ?? 0;
+            if (runs.Count == 0 || speaker != current || word.Start - runs[^1][^1].End > LongPause) runs.Add([]);
+            runs[^1].Add(word with { Speaker = speaker });
+            current = speaker;
+        }
+        var labels = new Dictionary<int, string>();
+        return runs.Select(r =>
+        {
+            var id = r[0].Speaker!.Value;
+            if (!labels.TryGetValue(id, out var label)) labels[id] = label = $"Speaker {labels.Count + 1}";
+            return new Turn(samples,
                 Math.Clamp((int)(r[0].Start * Audio.SampleRate), 0, samples.Length),
-                Math.Clamp((int)(r[^1].End * Audio.SampleRate), 0, samples.Length), r[0].Speaker!.Value)).ToList();
-
-            // Voices are still recognised locally when the speaker models are there, so named people keep their names.
-            var named = await NameSpeakersAsync(samples, turns, transcript, report, ct);
-            return named.Select((t, i) => t with { Heard = runs[i] }).ToList();
-        }
-        catch (Exception e) when (e is not OperationCanceledException)
-        {
-            Log.Warn($"ElevenLabs speaker detection failed, using the speaker models on this PC: {e.Message}");
-            return null;
-        }
+                Math.Clamp((int)(r[^1].End * Audio.SampleRate), 0, samples.Length), label, r);
+        }).ToList();
     }
 
     /// <summary>
@@ -508,8 +529,9 @@ public sealed partial class Notetaker : IDisposable
         // The people-count setting includes the user, who is on the other track. Without one, the people Teams
         // showed in the call are the count.
         var others = options.SpeakerCount > 1 ? options.SpeakerCount - 1 : recording.Participants.Count > 1 ? recording.Participants.Count : 0;
-        if (options.LabelSpeakers && await CloudTurnsAsync(call, others, options, model, transcript, report, ct) is { } cloud)
-            turns.AddRange(cloud);
+        if (options.LabelSpeakers && VoiceModel.Get(transcript.VoiceModel).IsCloud)
+            turns.AddRange(await CloudTurnsAsync(call, others, options, model!, report, ct)
+                ?? AudioFile.SpeechRegions(call).Select(r => new Turn(call, r.Start, r.End, "Others")).ToList());
         else if (options.LabelSpeakers && await FindSpeakersAsync(call, others, options.Speaker, transcript.VoiceModel, report, ct) is { } speakers)
             turns.AddRange(await NameSpeakersAsync(call, speakers, transcript, report, ct));
         else
@@ -547,6 +569,7 @@ public sealed partial class Notetaker : IDisposable
     public async Task RelearnVoicesAsync(string? voiceModel = null)
     {
         var model = voiceModel ?? VoiceModelId;
+        if (VoiceModel.Get(model).IsCloud) return; // ElevenLabs makes no voiceprints
         var recordings = await _ui.InvokeAsync(() => Jobs
             .Where(j => j.IsDone && j.TranscriptPath is not null && File.Exists(j.AudioPath))
             .Select(j => (Audio: j.AudioPath, Markdown: j.TranscriptPath!)).ToList());
@@ -592,7 +615,7 @@ public sealed partial class Notetaker : IDisposable
     /// </summary>
     async Task LearnVoicesForAsync(string model, NoteOptions options, Action<string, double> report)
     {
-        if (!options.LabelSpeakers || _voices.Unlearned(model).Count == 0) return;
+        if (!options.LabelSpeakers || VoiceModel.Get(model).IsCloud || _voices.Unlearned(model).Count == 0) return;
         report("Learning the named voices", -1);
         await RelearnVoicesAsync(model);
     }

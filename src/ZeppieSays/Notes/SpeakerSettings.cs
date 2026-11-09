@@ -67,6 +67,13 @@ public sealed record VoiceModel(string Id, string Name, string FileName, long Si
     public const string DefaultId = "campplus";
     /// <summary>The model voiceprints were made with before there was a choice.</summary>
     public const string LegacyId = "wespeaker";
+    /// <summary>
+    /// Not a model on this PC: ElevenLabs tells the speakers apart while it transcribes. Only works with ElevenLabs
+    /// as the speech model, has no settings, and names no one (no voiceprints are made).
+    /// </summary>
+    public const string CloudId = "elevenlabs";
+
+    public bool IsCloud => Id == CloudId;
 
     public static IReadOnlyList<VoiceModel> All { get; } =
     [
@@ -76,6 +83,8 @@ public sealed record VoiceModel(string Id, string Name, string FileName, long Si
             "The model Zeppie Says used first."),
         new("titanet", "TitaNet small (NVIDIA)", "nemo_en_titanet_small.onnx", 39_000_000, 0.65f,
             "An alternative to compare with; draws coarser turns."),
+        new(CloudId, "ElevenLabs (cloud)", "", 0, 0.7f,
+            "ElevenLabs tells the speakers apart while it transcribes; the audio goes there anyway. Needs ElevenLabs as the speech model (otherwise CAM++ is used). It can't recognise people you named."),
     ];
 
     public static VoiceModel Get(string? id) => All.FirstOrDefault(m => m.Id == id) ?? All[0];
