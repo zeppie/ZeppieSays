@@ -155,6 +155,11 @@ public sealed class NotetakerSettings
     public bool UseDictionary { get; set; } = true;
     /// <summary>Shows "Record this meeting?" when Teams, Zoom or another meeting app starts using the microphone.</summary>
     public bool AskToRecordMeetings { get; set; } = true;
+    /// <summary>
+    /// Transcribes new files in the folder (and finished meeting recordings) right away. Off, they wait in the queue
+    /// until the user presses Start. Files the user drops always wait, so their settings can be adjusted first.
+    /// </summary>
+    public bool AutoStart { get; set; } = true;
 }
 
 public sealed class CustomModel

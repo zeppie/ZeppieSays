@@ -10,6 +10,14 @@ namespace ZeppieSays.Notes;
 
 public enum NoteStatus { Waiting, Working, Done, Failed, Ready }
 
+/// <summary>A heading in the Notetaker list: the queue, or a day. The day orders the headings, newest first.</summary>
+public sealed record ListHeading(string Text, DateTime Day)
+{
+    public static readonly ListHeading Queue = new("Queue", DateTime.MaxValue);
+    public bool IsQueue => this == Queue;
+    public override string ToString() => Text;
+}
+
 /// <summary>One audio file in the Notetaker list, from waiting in the folder to a finished transcript.</summary>
 public sealed partial class NoteJob(string audioPath) : ObservableObject
 {
@@ -50,8 +58,33 @@ public sealed partial class NoteJob(string audioPath) : ObservableObject
     /// <summary>Settings for this file alone; null means the general Notetaker settings at the time it runs.</summary>
     public NoteOptions? Options { get; set; }
 
-    public NoteStatus Status { get => _status; set { if (Set(ref _status, value)) { Raise(nameof(IsWorking)); Raise(nameof(IsDone)); Raise(nameof(IsFailed)); Raise(nameof(IsReady)); } } }
+    public NoteStatus Status
+    {
+        get => _status;
+        set
+        {
+            if (!Set(ref _status, value)) return;
+            Raise(nameof(IsWorking)); Raise(nameof(IsDone)); Raise(nameof(IsFailed)); Raise(nameof(IsReady));
+            Raise(nameof(InQueue)); Raise(nameof(QueueRank)); Raise(nameof(ListGroup));
+        }
+    }
     NoteStatus _status;
+
+    /// <summary>Where it stands in the queue: lower goes first. The user changes it by dragging; see <see cref="Notetaker.Move"/>.</summary>
+    public int QueueOrder { get => _queueOrder; set => Set(ref _queueOrder, value); }
+    int _queueOrder;
+
+    /// <summary>Not finished yet: waiting, being transcribed, waiting for Start, or failed. Listed in the queue at the top.</summary>
+    public bool InQueue => Status != NoteStatus.Done;
+
+    /// <summary>The list's first sort: the file being transcribed, then the rest of the queue, then the finished ones.</summary>
+    public int QueueRank => IsWorking ? 0 : InQueue ? 1 : 2;
+
+    /// <summary>The heading it is listed under: the queue while it isn't finished, else its day.</summary>
+    public ListHeading ListGroup => InQueue ? ListHeading.Queue : new(DayGroup, SortDate.Date);
+
+    /// <summary>A file the user dropped: its settings open as soon as it shows up.</summary>
+    public bool OpenOnArrival { get; init; }
 
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
     string _statusText = "Waiting";
@@ -72,6 +105,7 @@ public sealed partial class NoteJob(string audioPath) : ObservableObject
         Raise(nameof(SortDate));
         Raise(nameof(Time));
         Raise(nameof(DayGroup));
+        Raise(nameof(ListGroup));
     }
 
     /// <summary>When the recording was made: the date in its name, else the file's time. What the list is ordered by.</summary>
@@ -218,10 +252,37 @@ public sealed partial class Notetaker : IDisposable
         _work.Release();
     }
 
+    /// <summary>Starts every file waiting for Start; they run in their order in the queue.</summary>
     public void StartAll()
     {
-        foreach (var job in Jobs.Where(j => j.IsReady).Reverse().ToList()) Start(job);
+        foreach (var job in Jobs.Where(j => j.IsReady).ToList()) Start(job);
     }
+
+    /// <summary>
+    /// Moves a file in the queue to just before (or after) another one; the queue is worked through from the top.
+    /// Without a target it goes to the end.
+    /// </summary>
+    public void Move(NoteJob job, NoteJob? target, bool after)
+    {
+        if (!job.InQueue || job == target) return;
+        _lastOrder = Math.Max(_lastOrder, Reorder(Jobs.Where(j => j.InQueue).ToList(), job, target is { InQueue: true } ? target : null, after));
+        Log.Info("Notetaker: changed the order of the queue");
+    }
+
+    /// <summary>Numbers the queue 1, 2, 3, … with <paramref name="job"/> moved next to <paramref name="target"/>; returns the last number.</summary>
+    public static int Reorder(IReadOnlyList<NoteJob> queue, NoteJob job, NoteJob? target, bool after)
+    {
+        var order = queue.Where(j => j != job).OrderBy(j => j.QueueOrder).ToList();
+        var at = target is null ? -1 : order.IndexOf(target);
+        order.Insert(at < 0 ? order.Count : after ? at + 1 : at, job);
+        for (var i = 0; i < order.Count; i++) order[i].QueueOrder = i + 1;
+        return order.Count;
+    }
+
+    /// <summary>The number the last file put in the queue got; the next one goes after it.</summary>
+    int _lastOrder;
+
+    int NextOrder() => ++_lastOrder;
 
     /// <summary>
     /// Puts a finished transcript back as Ready, with the current general settings, so its speakers can be worked
@@ -238,6 +299,7 @@ public sealed partial class Notetaker : IDisposable
         options.KeepText = options.CanKeepText; // the quick way, when it can
         job.Options = options;
         job.IsRedo = true;
+        job.QueueOrder = NextOrder();
         job.Status = NoteStatus.Ready;
         job.StatusText = "Do again · adjust its settings, then start";
     }
@@ -299,17 +361,21 @@ public sealed partial class Notetaker : IDisposable
     {
         if (!AudioFile.IsAudio(path) || Jobs.Any(j => j.AudioPath.Equals(path, StringComparison.OrdinalIgnoreCase)))
             return;
-        if (_review.Remove(Path.GetFullPath(path)))
+        // A dropped file waits for the user to look at its settings; so does every new file when they start them themselves.
+        var dropped = _review.Remove(Path.GetFullPath(path));
+        if (dropped || !Options.AutoStart)
         {
             Jobs.Insert(0, new NoteJob(path)
             {
                 Status = NoteStatus.Ready,
-                StatusText = "Ready · adjust its settings, then start",
+                StatusText = dropped ? "Ready · adjust its settings, then start" : "Ready · press Start",
                 Options = NoteOptions.From(Options),
+                QueueOrder = NextOrder(),
+                OpenOnArrival = dropped,
             });
             return;
         }
-        Jobs.Insert(0, new NoteJob(path));
+        Jobs.Insert(0, new NoteJob(path) { QueueOrder = NextOrder() });
         _work.Release();
     }
 
@@ -318,7 +384,8 @@ public sealed partial class Notetaker : IDisposable
         while (!_stop.IsCancellationRequested)
         {
             await _work.WaitAsync(_stop.Token);
-            while (await _ui.InvokeAsync(() => Jobs.LastOrDefault(j => j.Status == NoteStatus.Waiting)) is { } job)
+            // The top of the queue first: the user may have dragged another file up meanwhile.
+            while (await _ui.InvokeAsync(() => Jobs.Where(j => j.Status == NoteStatus.Waiting).MinBy(j => j.QueueOrder)) is { } job)
                 await ProcessAsync(job);
         }
     }

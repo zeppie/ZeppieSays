@@ -18,7 +18,10 @@ public sealed partial class NotetakerViewModel
     readonly Dictionary<string, (DateTime Stamp, string Text)> _transcriptText = new(StringComparer.OrdinalIgnoreCase);
     int _searchVersion;
 
-    /// <summary>The recordings newest first, under a heading per day, narrowed by <see cref="JobSearch"/>.</summary>
+    /// <summary>
+    /// The queue at the top, in the order it is worked through, then the finished recordings newest first under a
+    /// heading per day, narrowed by <see cref="JobSearch"/>.
+    /// </summary>
     public ListCollectionView JobsView => _jobsView ??= CreateJobsView();
 
     ListCollectionView CreateJobsView()
@@ -29,11 +32,22 @@ public sealed partial class NotetakerViewModel
             IsLiveGrouping = true,
             Filter = MatchesSearch,
         };
+        view.SortDescriptions.Add(new SortDescription(nameof(NoteJob.QueueRank), ListSortDirection.Ascending));
+        view.SortDescriptions.Add(new SortDescription(nameof(NoteJob.QueueOrder), ListSortDirection.Ascending));
         view.SortDescriptions.Add(new SortDescription(nameof(NoteJob.SortDate), ListSortDirection.Descending));
-        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(NoteJob.DayGroup)));
-        view.LiveSortingProperties.Add(nameof(NoteJob.SortDate));
-        view.LiveGroupingProperties.Add(nameof(NoteJob.DayGroup));
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(NoteJob.ListGroup)) { CustomSort = new GroupOrder() });
+        foreach (var property in new[] { nameof(NoteJob.QueueRank), nameof(NoteJob.QueueOrder), nameof(NoteJob.SortDate) })
+            view.LiveSortingProperties.Add(property);
+        view.LiveGroupingProperties.Add(nameof(NoteJob.ListGroup));
         return view;
+    }
+
+    /// <summary>The queue's heading first, then the days, newest first.</summary>
+    sealed class GroupOrder : System.Collections.IComparer
+    {
+        public int Compare(object? x, object? y) => Day(y).CompareTo(Day(x));
+
+        static DateTime Day(object? group) => ((group as CollectionViewGroup)?.Name as ListHeading)?.Day ?? DateTime.MinValue;
     }
 
     /// <summary>Finds a conversation: by its title, or by who was in it and what was said (the transcript).</summary>

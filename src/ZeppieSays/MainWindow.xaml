@@ -806,18 +806,30 @@
                                  BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                                  Visibility="{Binding ListExpanded, Converter={StaticResource Visible}}"
-                                 KeyDown="JobStrip_KeyDown">
+                                 KeyDown="JobStrip_KeyDown" AllowDrop="True"
+                                 PreviewMouseLeftButtonDown="JobStrip_PreviewMouseLeftButtonDown" PreviewMouseMove="JobStrip_PreviewMouseMove"
+                                 DragOver="JobStrip_DragOver" DragLeave="JobStrip_DragLeave" Drop="JobStrip_Drop">
                             <ListBox.GroupStyle>
                                 <GroupStyle>
                                     <GroupStyle.HeaderTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding Name}" Style="{StaticResource Caption}" FontSize="10"
-                                                       Margin="6,8,0,3" />
+                                            <TextBlock Text="{Binding Name}" FontSize="10" Margin="6,8,0,3">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Name.IsQueue}" Value="True">
+                                                                <Setter Property="ToolTip" Value="Transcribed from the top down. Drag a recording to change the order." />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </DataTemplate>
                                     </GroupStyle.HeaderTemplate>
                                 </GroupStyle>
                             </ListBox.GroupStyle>
-                            <!-- Quiet rows: a soft fill when selected, a hairline only on hover -->
+                            <!-- Quiet rows: a soft fill when selected, a hairline only on hover. A row in the queue can be
+                                 dragged; while it is, a line shows where it goes (Tag is set to Above or Below). -->
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem">
                                     <Setter Property="Cursor" Value="Hand" />
@@ -825,16 +837,28 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="ListBoxItem">
-                                                <Border x:Name="Bd" CornerRadius="8" Padding="8,5" Margin="0,0,10,1" BorderThickness="1"
-                                                        Background="Transparent" BorderBrush="Transparent">
-                                                    <ContentPresenter />
-                                                </Border>
+                                                <Grid Margin="0,0,10,1">
+                                                    <Border x:Name="Bd" CornerRadius="8" Padding="8,5" BorderThickness="1"
+                                                            Background="Transparent" BorderBrush="Transparent">
+                                                        <ContentPresenter />
+                                                    </Border>
+                                                    <Rectangle x:Name="DropAbove" Height="2" RadiusX="1" RadiusY="1" VerticalAlignment="Top"
+                                                               Margin="4,-1,4,0" Fill="{StaticResource Accent}" Visibility="Collapsed" IsHitTestVisible="False" />
+                                                    <Rectangle x:Name="DropBelow" Height="2" RadiusX="1" RadiusY="1" VerticalAlignment="Bottom"
+                                                               Margin="4,0,4,-2" Fill="{StaticResource Accent}" Visibility="Collapsed" IsHitTestVisible="False" />
+                                                </Grid>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
                                                         <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
                                                     </Trigger>
                                                     <Trigger Property="IsSelected" Value="True">
                                                         <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                                                    </Trigger>
+                                                    <Trigger Property="Tag" Value="Above">
+                                                        <Setter TargetName="DropAbove" Property="Visibility" Value="Visible" />
+                                                    </Trigger>
+                                                    <Trigger Property="Tag" Value="Below">
+                                                        <Setter TargetName="DropBelow" Property="Visibility" Value="Visible" />
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -1949,6 +1973,11 @@
                                     </Grid>
                                     <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
                                                Text="Every audio or video file in this folder is transcribed. The transcript (.md) and the audio then move to Done." />
+
+                                    <CheckBox Content="Start transcribing new recordings right away" IsChecked="{Binding AutoStart}" Margin="0,14,0,0"
+                                              ToolTip="New files in the folder and finished meeting recordings" />
+                                    <TextBlock Style="{StaticResource Caption}" Margin="28,2,0,0" TextWrapping="Wrap"
+                                               Text="Off: they wait in the queue on the Notetaker page until you press Start, so you can check their settings or pick which goes first. Files you drop on the page always wait for Start." />
 
                                     <!-- Meetings -->
                                     <CheckBox Content="Ask when a meeting starts" IsChecked="{Binding AskToRecordMeetings}" Margin="0,14,0,0"

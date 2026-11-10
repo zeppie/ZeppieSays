@@ -109,7 +109,7 @@ public sealed partial class NotetakerViewModel : ObservableObject
                     if (args.PropertyName == nameof(NoteJob.IsReady)) Raise(nameof(HasSeveralReady));
                     if (s == Selected && args.PropertyName is nameof(NoteJob.Status) or nameof(NoteJob.StatusText)) RaisePlaceholder();
                 };
-                if (job.IsReady) Selected = job;
+                if (job is { IsReady: true, OpenOnArrival: true }) Selected = job;
             }
             Raise(nameof(HasSeveralReady));
         };
@@ -126,6 +126,16 @@ public sealed partial class NotetakerViewModel : ObservableObject
         get => Options.AskToRecordMeetings;
         set { Options.AskToRecordMeetings = value; _save(); Raise(); }
     }
+
+    /// <summary>New recordings are transcribed right away; off, they wait in the queue for Start.</summary>
+    public bool AutoStart
+    {
+        get => Options.AutoStart;
+        set { Options.AutoStart = value; _save(); Raise(); }
+    }
+
+    /// <summary>Moves a file in the queue next to another one (dragged in the list).</summary>
+    public void MoveInQueue(NoteJob job, NoteJob? target, bool after) => _notetaker.Move(job, target, after);
 
     public ObservableCollection<NoteJob> Jobs => _notetaker.Jobs;
     public bool SummaryAvailable { get; }
